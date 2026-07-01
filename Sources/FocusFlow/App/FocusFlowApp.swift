@@ -54,7 +54,11 @@ private struct MenuBarClockLabel: View {
         .task {
             // The menu-bar label is the only view guaranteed to instantiate at
             // launch in an .accessory app, so it drives the "open window at
-            // launch" preference. Runs once.
+            // launch" preference, and it hands AppModel a way to reopen the timer
+            // window (e.g. via ⌃⌥⌘F) after the user has closed it — AppModel has
+            // no SwiftUI environment of its own to call openWindow directly.
+            app.openTimerWindow = { openWindow(id: "timer") }
+
             guard !didOpenAtLaunch else { return }
             didOpenAtLaunch = true
             if app.preferences.showWindowAtLaunch {

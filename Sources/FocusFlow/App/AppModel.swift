@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import FocusFlowCore
 import Foundation
 import SwiftUI
@@ -15,6 +16,13 @@ final class AppModel: ObservableObject {
     @Published private(set) var shortcutStatus: ShortcutService.Status = .inactive
     @Published private(set) var notificationPermissionStatus: NotificationPermissionStatus = .unknown
 
+    /// Opens the timer window. Wired up by `MenuBarClockLabel` in FocusFlowApp.swift,
+    /// since the menu-bar label is the only view guaranteed to exist at launch in this
+    /// .accessory app — it captures `@Environment(\.openWindow)` and hands it back here
+    /// so AppModel (which has no SwiftUI environment of its own) can reopen a closed
+    /// timer window from the global Show Timer shortcut.
+    var openTimerWindow: (() -> Void)?
+
     private let sessionStore: SessionStore?
     private let runtimeStore: RuntimeStore?
     private let preferenceStore = PreferencesStore()
@@ -22,6 +30,7 @@ final class AppModel: ObservableObject {
     private let soundService = SoundService()
     private let shortcutService = ShortcutService()
     private var ticker: Foundation.Timer?
+    private var didBecomeActiveTask: Task<Void, Never>?
 
     init() {
         let loadedPreferences = preferenceStore.load()
@@ -39,6 +48,11 @@ final class AppModel: ObservableObject {
         syncTicker()
         Task { await refreshNotificationPermissionStatus() }
         configureShortcuts()
+        observeAppActivation()
+    }
+
+    deinit {
+        didBecomeActiveTask?.cancel()
     }
 
     var menuBarTitle: String {
@@ -292,12 +306,22 @@ final class AppModel: ObservableObject {
     private func refreshRecoveredTimer() {
         objectWillChange.send()
         if let event = engine.tick(now: Date(), preferences: preferences) {
-            handle(event)
+            // If the phase actually finished while the app was quit (possibly hours
+            // ago, e.g. at login), suppress the completion sound/notification for a
+            // stale event — but still record the session below via handle().
+            let staleThreshold: TimeInterval = 120
+            let endedAt: Date
+            switch event {
+            case .phaseCompleted(let phase), .phaseSkipped(let phase):
+                endedAt = phase.endedAt
+            }
+            let isStale = Date().timeIntervalSince(endedAt) > staleThreshold
+            handle(event, playFeedback: !isStale)
         }
         persistRuntime()
     }
 
-    private func handle(_ event: TimerEvent) {
+    private func handle(_ event: TimerEvent, playFeedback: Bool = true) {
         let completedPhase: CompletedPhase
         let completed: Bool
 
@@ -329,7 +353,7 @@ final class AppModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
 
-        if completed {
+        if completed && playFeedback {
             playCompletionFeedback(for: completedPhase.phase, nextPhase: completedPhase.nextPhase)
         }
     }
@@ -343,14 +367,12 @@ final class AppModel: ObservableObject {
         if phase == .focus {
             notificationService.notify(
                 title: "Focus complete",
-                body: "Next: \(nextPhase.displayName)",
-                sound: preferences.focusCompleteSound
+                body: "Next: \(nextPhase.displayName)"
             )
         } else {
             notificationService.notify(
                 title: "Break complete",
-                body: "Ready for focus",
-                sound: preferences.breakCompleteSound
+                body: "Ready for focus"
             )
         }
     }
@@ -359,6 +381,31 @@ final class AppModel: ObservableObject {
         shortcutStatus = shortcutService.install { [weak self] action in
             Task { @MainActor in
                 self?.performShortcut(action)
+            }
+        }
+    }
+
+    /// Re-runs shortcut installation. Safe to call any time — `ShortcutService.install`
+    /// always calls `stop()` first, so this never leaves duplicate monitors installed.
+    /// Exposed so Settings can offer a manual "Recheck Access" action, and so we can
+    /// upgrade from `.localOnly` to `.activeGlobal` automatically once the user grants
+    /// Accessibility access without requiring a relaunch.
+    func recheckShortcuts() {
+        configureShortcuts()
+    }
+
+    /// Accessibility access can be granted while the app is already running (System
+    /// Settings → Privacy & Security → Accessibility). Global shortcuts installed at
+    /// launch stay dead until shortcuts are reconfigured, so re-check whenever the app
+    /// becomes active again and status is currently local-only.
+    private func observeAppActivation() {
+        didBecomeActiveTask = Task { [weak self] in
+            let notifications = NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification)
+            for await _ in notifications {
+                guard let self else { return }
+                if self.shortcutStatus == .localOnly && AXIsProcessTrusted() {
+                    self.recheckShortcuts()
+                }
             }
         }
     }
@@ -392,6 +439,10 @@ final class AppModel: ObservableObject {
                 timerWindow.deminiaturize(nil)
             }
             timerWindow.makeKeyAndOrderFront(nil)
+        } else {
+            // The window was closed (not just miniaturized), so no matching NSWindow
+            // exists to bring forward. Ask the SwiftUI environment to open it again.
+            openTimerWindow?()
         }
         app.activate(ignoringOtherApps: true)
     }

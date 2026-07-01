@@ -229,6 +229,10 @@ struct SettingsView: View {
                     Text("Global shortcuts require Accessibility access. Open System Settings → Privacy & Security → Accessibility and grant access to FocusFlow.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    Button("Recheck Access") {
+                        app.recheckShortcuts()
+                    }
                 }
             }
 

@@ -69,11 +69,16 @@ final class NotificationService: @unchecked Sendable {
         NSWorkspace.shared.open(url)
     }
 
-    func notify(title: String, body: String, sound: TimerSound) {
+    func notify(title: String, body: String) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        content.sound = UNNotificationSound(named: UNNotificationSoundName("\(sound.rawValue).aiff"))
+        // Intentionally no sound here: UNNotificationSound(named:) only resolves names
+        // from the app bundle or ~/Library/Sounds, never /System/Library/Sounds, so a
+        // system sound name like "Ping.aiff" silently fails to resolve and the banner
+        // would just be silent anyway. SoundService (NSSound) is the single audio path
+        // for completion feedback — see AppModel.playCompletionFeedback — so leaving
+        // this nil also avoids double-playing.
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
