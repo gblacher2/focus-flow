@@ -61,15 +61,18 @@ struct StatisticsView: View {
             .accessibilityLabel("Period")
             .frame(maxWidth: 300)
 
-            Picker("Tag", selection: $tagID) {
+            Picker(selection: $tagID) {
                 Text("All Tags").tag(UUID?.none)
                 ForEach(app.tags) { tag in
                     Text(tag.title).tag(Optional(tag.id))
                 }
+            } label: {
+                EmptyView()
             }
+            .accessibilityLabel("Tag filter")
             .frame(width: 132)
 
-            Toggle("Incomplete", isOn: $showIncomplete)
+            Toggle("Show skipped", isOn: $showIncomplete)
                 .toggleStyle(.checkbox)
                 .font(.subheadline)
 

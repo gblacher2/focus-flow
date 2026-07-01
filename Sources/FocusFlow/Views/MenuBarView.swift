@@ -10,8 +10,6 @@ struct MenuBarView: View {
         VStack(spacing: 0) {
             // Status header
             statusHeader
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
 
             Divider()
 
@@ -71,62 +69,33 @@ struct MenuBarView: View {
 
     // MARK: - Status Header
 
+    @ViewBuilder
     private var statusHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Image(systemName: app.menuBarSystemImage)
-                    .font(.caption)
-                    .foregroundStyle(statusColor)
+        Text(statusLine)
 
-                Text(statusTitle)
-                    .font(.headline)
-                    .lineLimit(1)
-
-                Spacer()
-
-                if app.engine.isRunning || app.engine.phase == .paused {
-                    Text(DurationFormatter.clock(app.engine.remainingSeconds))
-                        .font(.subheadline.monospacedDigit().weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if !app.sessionTitle.isEmpty {
-                Text(app.sessionTitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            if let tag = app.selectedTag {
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(Color.tag(tag.colorName))
-                        .frame(width: 7, height: 7)
-                    Text(tag.title)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-
-            if app.engine.isRunning || app.engine.phase == .paused {
-                // Micro progress bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(.quaternary)
-                            .frame(height: 3)
-
-                        Capsule()
-                            .fill(statusColor)
-                            .frame(width: max(2, geo.size.width * app.progress), height: 3)
-                    }
-                }
-                .frame(height: 3)
-                .padding(.top, 2)
-            }
+        if let detailLine {
+            Text(detailLine)
         }
+    }
+
+    /// Composite status text, e.g. "Ready", "Focusing · 23:15", "Focus Paused · 23:15",
+    /// "Next: Short Break".
+    private var statusLine: String {
+        if app.engine.phase == .completed {
+            return "Next: \(app.engine.pendingPhase.displayName)"
+        }
+        if app.engine.isRunning || app.engine.phase == .paused {
+            return "\(statusTitle) · \(DurationFormatter.clock(app.engine.remainingSeconds))"
+        }
+        return statusTitle
+    }
+
+    /// Session title and/or tag combined into one line, e.g. "Writing report · Study".
+    /// `nil` when neither is present.
+    private var detailLine: String? {
+        let parts = [app.sessionTitle, app.selectedTag?.title]
+            .compactMap { $0?.isEmpty == false ? $0 : nil }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     // MARK: - Quick Settings
@@ -226,10 +195,6 @@ struct MenuBarView: View {
         case .completed:
             "Phase Complete"
         }
-    }
-
-    private var statusColor: Color {
-        Color.phase(app.engine.displayPhase)
     }
 
     private func presetButton(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

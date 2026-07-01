@@ -117,7 +117,7 @@ The app runs as `.accessory` (no dock icon) — it's menu-bar-first.
 
 ### Menu Bar (MenuBarView.swift)
 - **Icon + time** always shown in menu bar (e.g. `● 23:15`)
-- **Dropdown header:** phase name, time, session title, micro progress bar (3pt capsule)
+- **Dropdown header:** one or two plain `Text` rows (native menu-item rendering — no HStack/layout tricks, since MenuBarExtra's menu style flattens custom layouts). Row 1 is always shown: composite status text, e.g. "Ready", "Focusing · 23:15", "Focus Paused · 23:15", "Next: Short Break". Row 2 appears only when a session title and/or tag is set, e.g. "Writing report · Study"
 - **Actions:** contextual labels — "Start Focus", "Pause Timer", "Resume", "Skip Phase", etc.
 - **Windows section:** Timer Window, Statistics, Settings…
 - **Quit:** "Quit FocusFlow"
@@ -219,7 +219,6 @@ All three must pass after any change. The project uses Swift 6 strict concurrenc
 - **Animations** — ring transitions, phase change animations, control feedback
 - **Window appearance** — vibrancy, materials, toolbar style
 - **Color refinement** — whether accent blue is the right focus color, dark mode tuning
-- **Menu bar dropdown** — whether the status header is too tall, progress bar styling
 - **Statistics** — chart/graph for focus time (day-grouped headers already implemented)
 - **Empty states** — illustrations or more helpful guidance
 - **Accessibility** — Dynamic Type support (VoiceOver labels and Reduce Motion are already implemented in ContentView/ControlButtonStyle)

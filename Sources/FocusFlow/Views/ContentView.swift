@@ -1,3 +1,4 @@
+import AppKit
 import FocusFlowCore
 import SwiftUI
 
@@ -33,6 +34,17 @@ struct ContentView: View {
         }
         .frame(minWidth: 296, idealWidth: 312)
         .scenePadding(.vertical)
+        // macOS gives first-responder to the first focusable control (the title
+        // field) when the window opens, which silently swallows the bare-Space
+        // play/pause shortcut (see SpaceToggleShortcut below). `.defaultFocus`
+        // cannot veto that AppKit-level assignment, so bounce focus off after the
+        // window settles; the user clicks into the field to type a title.
+        .onAppear {
+            DispatchQueue.main.async {
+                titleFocused = false
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            }
+        }
     }
 
     // MARK: - Timer Ring
@@ -52,10 +64,6 @@ struct ContentView: View {
                 )
                 .rotationEffect(.degrees(-90))
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: app.progress)
-
-            if let tag = app.selectedTag {
-                tagRingDot(tag)
-            }
 
             // Center content
             VStack(spacing: 5) {
@@ -128,16 +136,6 @@ struct ContentView: View {
         .frame(maxWidth: 118)
     }
 
-    private func tagRingDot(_ tag: Tag) -> some View {
-        Circle()
-            .fill(Color.tag(tag.colorName))
-            .frame(width: 12, height: 12)
-            .padding(3)
-            .background(.background, in: Circle())
-            .offset(x: 68, y: -68)
-            .accessibilityHidden(true)
-    }
-
     private var phaseLabelText: String {
         switch app.engine.phase {
         case .ready:
@@ -190,7 +188,7 @@ struct ContentView: View {
                 Image(systemName: app.primaryActionSystemImage)
                     .font(.title2)
             }
-            .buttonStyle(ControlButtonStyle(size: 44, prominent: true, tint: ringColor))
+            .buttonStyle(ControlButtonStyle(size: 44, prominent: true, tint: playButtonTint))
             // Space toggles the timer, but only when the title field isn't being
             // edited — otherwise the key equivalent would swallow typed spaces.
             .modifier(SpaceToggleShortcut(enabled: !titleFocused))
@@ -318,6 +316,19 @@ struct ContentView: View {
 
     private var ringColor: Color {
         Color.phase(app.engine.displayPhase)
+    }
+
+    /// The primary play/pause button is tinted with `ringColor` (the phase color), but
+    /// `ringColor` is `.secondary` gray while ready/completed — exactly when the button
+    /// should invite the user to start. Use the accent color in those two states only;
+    /// running/paused keep the phase-color behavior.
+    private var playButtonTint: Color {
+        switch app.engine.phase {
+        case .ready, .completed:
+            .accentColor
+        default:
+            ringColor
+        }
     }
 
     private var ringGradient: AngularGradient {
