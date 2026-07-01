@@ -20,6 +20,11 @@ let package = Package(
             dependencies: ["FocusFlowCore"],
             path: "Sources/FocusFlow"
         ),
+        .executableTarget(
+            name: "SelfTests",
+            dependencies: ["FocusFlowCore"],
+            path: "Sources/SelfTests"
+        ),
         .testTarget(
             name: "FocusFlowTests",
             dependencies: ["FocusFlowCore"],

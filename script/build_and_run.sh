@@ -14,7 +14,12 @@ APP_MACOS="$APP_CONTENTS/MacOS"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+# Every mode except --build-only relaunches the app, so quit it first. --build-only
+# only assembles the bundle (e.g. for packaging) and must not kill a running timer.
+case "$MODE" in
+  --build-only|build-only) ;;
+  *) pkill -x "$APP_NAME" >/dev/null 2>&1 || true ;;
+esac
 
 swift build
 BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
@@ -84,8 +89,14 @@ case "$MODE" in
     sleep 1
     pgrep -x "$APP_NAME" >/dev/null
     ;;
+  --build-only|build-only)
+    # Build and assemble the .app bundle only; do not launch it. Used by
+    # script/package_release.sh so the bundle-assembly logic (Info.plist,
+    # icon, binary placement) lives in exactly one place.
+    echo "$APP_BUNDLE"
+    ;;
   *)
-    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify|--build-only]" >&2
     exit 2
     ;;
 esac

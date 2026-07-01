@@ -5,7 +5,7 @@
 A native macOS SwiftUI menu-bar-first Pomodoro timer. Quiet, calm, Mac-native utility — not flashy, not a dashboard. Inspired by Flow for macOS in spirit but with original design and code.
 
 **Bundle ID:** `com.gabrielblacher.FocusFlow`
-**Project path:** `/Users/gabrielblacher/Documents/Codex/focus-flow`
+**Project path:** `/Users/gabrielblacher/Projects/focus-flow`
 **Min deployment:** macOS 14 (Sonoma)
 **Build system:** SwiftPM (no Xcode project, Command Line Tools compatible)
 
@@ -36,7 +36,9 @@ focus-flow/
 │   │   ├── Stores/                        # (empty — stores are in Services/)
 │   │   ├── Models/                        # (empty — models are in FocusFlowCore)
 │   │   └── Support/
-│   │       └── AppFormatters.swift        # DateFormatter instances (dateTime, time)
+│   │       ├── AppFormatters.swift        # DateFormatter instances (dateTime, time, dayHeader)
+│   │       ├── ControlButtonStyle.swift   # Circular button style w/ hover & press feedback
+│   │       └── Palette.swift              # Color.phase(_:) / Color.tag(_:) helpers
 │   └── FocusFlowCore/                     # Library target (no AppKit dependency)
 │       ├── Models/
 │       │   ├── TimerEngine.swift          # Pure state machine: phases, tick, start/pause/skip/reset
@@ -53,7 +55,8 @@ focus-flow/
 │           └── StatisticsCalculator.swift # Filtering by period/tag, summary aggregation
 ├── Tests/FocusFlowTests/                  # Tests against FocusFlowCore
 ├── script/
-│   └── build_and_run.sh                   # Build & optional --verify flag
+│   ├── build_and_run.sh                   # Build & optional --verify/--logs/--build-only flag
+│   └── package_release.sh                 # Ad-hoc sign + zip a distributable build into dist/
 └── .codex/environments/environment.toml
 ```
 
@@ -92,9 +95,9 @@ All views observe `AppModel` via `@ObservedObject`. Actions go through `AppModel
 
 | Scene | ID | Size |
 |---|---|---|
-| Timer Window | `"timer"` | 340×460 default |
-| Statistics Window | `"statistics"` | 780×560 default |
-| Settings | native `Settings` scene | 480×380 |
+| Timer Window | `"timer"` | 312×398 default |
+| Statistics Window | `"statistics"` | 740×520 default |
+| Settings | native `Settings` scene | 460×400 |
 | MenuBarExtra | — | dropdown menu |
 
 The app runs as `.accessory` (no dock icon) — it's menu-bar-first.
@@ -105,10 +108,10 @@ The app runs as `.accessory` (no dock icon) — it's menu-bar-first.
 
 ### Timer Window (ContentView.swift)
 - Centered layout: ring → controls → title/tag
-- **Ring:** 220×220, 6pt stroke, angular gradient matching phase color, `.easeInOut` animation
-- **Time:** 52pt, `weight: .light`, `.rounded` design, monospaced digits
+- **Ring:** 198×198, 6pt stroke, angular gradient matching phase color, `.easeInOut` animation (skipped under Reduce Motion)
+- **Time:** 48pt, `weight: .light`, `.rounded` design, monospaced digits
 - **Phase label:** below time inside ring — e.g. "Focus · 1/4", "Short Break · 2/4", "Next: Short Break"
-- **Controls:** circular primary play/pause (48×48, tinted background), plain icon buttons for prev/skip/reset (32×32)
+- **Controls:** circular primary play/pause (44×44, tinted background), plain icon buttons for prev/skip/reset (30×30) — `ControlButtonStyle` (Support/ControlButtonStyle.swift) adds hover/press feedback
 - **Title:** borderless centered `TextField`, placeholder "What are you working on?"
 - **Tag:** `Menu`-based picker with `Circle().fill()` color dots, `.menuStyle(.borderlessButton)`
 
@@ -129,7 +132,7 @@ The app runs as `.accessory` (no dock icon) — it's menu-bar-first.
 ### Statistics (StatisticsView.swift)
 - **Toolbar:** segmented period picker, tag filter, incomplete toggle, ellipsis menu (Export CSV, Reset with confirmation dialog)
 - **Summary tiles:** 4 tiles with SF Symbol icon accents — Focus Sessions, Focus Time, Breaks, Interruptions
-- **Session list:** alternating row backgrounds, phase icon (brain/cup), title, time/duration, tag dot, phase label
+- **Session list:** grouped into day sections with "Today"/"Yesterday"/date headers (`AppFormatters.dayHeader`), phase icon (brain/cup), title, time/duration, tag dot, phase label
 - **Empty state:** `ContentUnavailableView` with "Completed sessions will appear here."
 
 ---
@@ -158,16 +161,18 @@ The app runs as `.accessory` (no dock icon) — it's menu-bar-first.
 
 ## Tag Colors
 
-Tags use named colors: `"blue"`, `"green"`, `"orange"`, `"purple"`, `"pink"`. Mapped via helper:
+Tags use named colors: `"blue"`, `"green"`, `"orange"`, `"purple"`, `"pink"`. Mapped via `Color.tag(_:)` in `Support/Palette.swift`:
 
 ```swift
-func tagColor(for name: String) -> Color {
-    switch name {
-    case "green": .green
-    case "orange": .orange
-    case "purple": .purple
-    case "pink": .pink
-    default: .blue
+extension Color {
+    static func tag(_ name: String) -> Color {
+        switch name {
+        case "green": .green
+        case "orange": .orange
+        case "purple": .purple
+        case "pink": .pink
+        default: .blue
+        }
     }
 }
 ```
@@ -179,13 +184,13 @@ func tagColor(for name: String) -> Color {
 ## Build & Verify
 
 ```bash
-cd /Users/gabrielblacher/Documents/Codex/focus-flow
+cd /Users/gabrielblacher/Projects/focus-flow
 
 # Build
 swift build
 
-# Test
-swift test
+# Self-tests (swift test silently no-ops on this CLT-only machine — do not use it)
+swift run SelfTests
 
 # Full verify
 ./script/build_and_run.sh --verify
@@ -214,10 +219,9 @@ All three must pass after any change. The project uses Swift 6 strict concurrenc
 - **Animations** — ring transitions, phase change animations, control feedback
 - **Window appearance** — vibrancy, materials, toolbar style
 - **Color refinement** — whether accent blue is the right focus color, dark mode tuning
-- **Interaction details** — hover states, focus rings, press states on controls
 - **Menu bar dropdown** — whether the status header is too tall, progress bar styling
-- **Statistics** — date grouping (today/yesterday headers), chart/graph for focus time
+- **Statistics** — chart/graph for focus time (day-grouped headers already implemented)
 - **Empty states** — illustrations or more helpful guidance
-- **Accessibility** — VoiceOver labels, Dynamic Type support, reduced motion
+- **Accessibility** — Dynamic Type support (VoiceOver labels and Reduce Motion are already implemented in ContentView/ControlButtonStyle)
 - **Sound picker** — preview button in settings
 - **Onboarding** — first-launch experience (if needed)
