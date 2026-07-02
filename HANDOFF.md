@@ -116,7 +116,7 @@ The app runs as `.accessory` (no dock icon) — it's menu-bar-first.
 - **Tag:** `Menu`-based picker with `Circle().fill()` color dots, `.menuStyle(.borderlessButton)`
 
 ### Menu Bar (MenuBarView.swift)
-- **Icon + time** always shown in menu bar (e.g. `● 23:15`)
+- **Icon + time** shown in menu bar (e.g. `● 23:15`); the countdown text is hidden when idle (`.ready`/`.completed`) if the "Show countdown in menu bar when idle" preference (Timer tab → Behavior, default on) is off — icon-only in that case. While a phase is running (focus or break), the icon becomes a progress-filling glyph (`circle.dotted.circle` with `variableValue` tracking `AppModel.progress`, 0→1) instead of the static symbol, with phase color (blue/green) still carrying the focus-vs-break distinction. Non-running states keep static symbols: `circle` (ready), `pause.circle` (paused), `checkmark.circle` (completed).
 - **Dropdown header:** one or two plain `Text` rows (native menu-item rendering — no HStack/layout tricks, since MenuBarExtra's menu style flattens custom layouts). Row 1 is always shown: composite status text, e.g. "Ready", "Focusing · 23:15", "Focus Paused · 23:15", "Next: Short Break". Row 2 appears only when a session title and/or tag is set, e.g. "Writing report · Study"
 - **Actions:** contextual labels — "Start Focus", "Pause Timer", "Resume", "Skip Phase", etc.
 - **Windows section:** Timer Window, Statistics, Settings…

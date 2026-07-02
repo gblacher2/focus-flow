@@ -70,6 +70,7 @@ struct SettingsView: View {
                 Toggle("Start breaks automatically", isOn: preferenceBinding(\.autoStartBreaks))
                 Toggle("Start focus automatically", isOn: preferenceBinding(\.autoStartFocus))
                 Toggle("Show timer window at launch", isOn: preferenceBinding(\.showWindowAtLaunch))
+                Toggle("Show countdown in menu bar when idle", isOn: preferenceBinding(\.showCountdownWhenIdle))
             }
         }
         .formStyle(.grouped)
@@ -122,16 +123,36 @@ struct SettingsView: View {
             Section("Completion Sounds") {
                 Toggle("Play sounds", isOn: preferenceBinding(\.soundsEnabled))
 
-                Picker("After focus", selection: preferenceBinding(\.focusCompleteSound)) {
-                    ForEach(TimerSound.allCases) { sound in
-                        Text(sound.displayName).tag(sound)
+                HStack {
+                    Picker("After focus", selection: preferenceBinding(\.focusCompleteSound)) {
+                        ForEach(TimerSound.allCases) { sound in
+                            Text(sound.displayName).tag(sound)
+                        }
                     }
+                    Button {
+                        app.previewSound(app.preferences.focusCompleteSound)
+                    } label: {
+                        Image(systemName: "play.circle")
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Preview sound")
                 }
 
-                Picker("After break", selection: preferenceBinding(\.breakCompleteSound)) {
-                    ForEach(TimerSound.allCases) { sound in
-                        Text(sound.displayName).tag(sound)
+                HStack {
+                    Picker("After break", selection: preferenceBinding(\.breakCompleteSound)) {
+                        ForEach(TimerSound.allCases) { sound in
+                            Text(sound.displayName).tag(sound)
+                        }
                     }
+                    Button {
+                        app.previewSound(app.preferences.breakCompleteSound)
+                    } label: {
+                        Image(systemName: "play.circle")
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Preview sound")
                 }
             }
             .disabled(!app.preferences.soundsEnabled)

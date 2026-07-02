@@ -105,6 +105,60 @@ t.group("SessionPreset") {
     t.checkEqual(classic.durationSummary, "25 / 5 min", "preset duration summary reads focus over break")
 }
 
+// MARK: - TimerPreferences decoding tests
+
+t.group("TimerPreferences decoding") {
+    // Backward compatibility: JSON persisted before `showCountdownWhenIdle`
+    // existed must still decode — a missing key should default to `true`,
+    // not throw (which would send PreferencesStore.load() down its
+    // all-defaults fallback and silently wipe the user's real settings).
+    let oldShapeJSON = """
+    {
+        "focusMinutes": 42,
+        "shortBreakMinutes": 7,
+        "longBreakMinutes": 20,
+        "sessionsBeforeLongBreak": 3,
+        "autoStartBreaks": true,
+        "autoStartFocus": false,
+        "notificationsEnabled": false,
+        "soundsEnabled": true,
+        "focusCompleteSound": "Hero",
+        "breakCompleteSound": "Pop",
+        "showWindowAtLaunch": true
+    }
+    """.data(using: .utf8)!
+
+    do {
+        let decoded = try JSONDecoder().decode(TimerPreferences.self, from: oldShapeJSON)
+        t.checkEqual(decoded.showCountdownWhenIdle, true, "old-shape JSON without showCountdownWhenIdle defaults to true")
+        t.checkEqual(decoded.focusMinutes, 42, "old-shape JSON preserves focusMinutes")
+        t.checkEqual(decoded.shortBreakMinutes, 7, "old-shape JSON preserves shortBreakMinutes")
+        t.checkEqual(decoded.longBreakMinutes, 20, "old-shape JSON preserves longBreakMinutes")
+        t.checkEqual(decoded.sessionsBeforeLongBreak, 3, "old-shape JSON preserves sessionsBeforeLongBreak")
+        t.checkEqual(decoded.autoStartBreaks, true, "old-shape JSON preserves autoStartBreaks")
+        t.checkEqual(decoded.autoStartFocus, false, "old-shape JSON preserves autoStartFocus")
+        t.checkEqual(decoded.notificationsEnabled, false, "old-shape JSON preserves notificationsEnabled")
+        t.checkEqual(decoded.soundsEnabled, true, "old-shape JSON preserves soundsEnabled")
+        t.checkEqual(decoded.focusCompleteSound, .hero, "old-shape JSON preserves focusCompleteSound")
+        t.checkEqual(decoded.breakCompleteSound, .pop, "old-shape JSON preserves breakCompleteSound")
+        t.checkEqual(decoded.showWindowAtLaunch, true, "old-shape JSON preserves showWindowAtLaunch")
+    } catch {
+        t.check(false, "decoding old-shape JSON (no showCountdownWhenIdle key) threw: \(error)")
+    }
+
+    // Full encode -> decode round-trip preserves showCountdownWhenIdle == false.
+    do {
+        var prefs = TimerPreferences()
+        prefs.showCountdownWhenIdle = false
+        let data = try JSONEncoder().encode(prefs)
+        let roundTripped = try JSONDecoder().decode(TimerPreferences.self, from: data)
+        t.checkEqual(roundTripped.showCountdownWhenIdle, false, "encode/decode round-trip preserves showCountdownWhenIdle == false")
+        t.checkEqual(roundTripped, prefs, "encode/decode round-trip preserves full TimerPreferences equality")
+    } catch {
+        t.check(false, "encode/decode round-trip threw: \(error)")
+    }
+}
+
 // MARK: - SessionStore tests
 
 func sampleRecord(

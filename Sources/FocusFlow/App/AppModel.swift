@@ -74,6 +74,26 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The menu-bar icon while a phase is actively running: a single symbol
+    /// whose fill grows with `progress` (0→1), replacing the static
+    /// focus/break glyphs so the icon itself reflects live progress. Color
+    /// still carries the focus-vs-break distinction via `Color.phase(_:)`.
+    ///
+    /// `progress.indicator` (SF Symbols 6 / macOS 15+) isn't available at
+    /// this app's macOS 14 minimum deployment target, so `circle.dotted.circle`
+    /// is used instead — it supports `variableValue` back to macOS 13.
+    static let menuBarProgressSystemImage = "circle.dotted.circle"
+
+    /// Icon name to render for the current state, plus the `variableValue`
+    /// to apply (non-nil only while a phase is running).
+    var menuBarIcon: (systemName: String, variableValue: Double?) {
+        if engine.isRunning {
+            (Self.menuBarProgressSystemImage, progress)
+        } else {
+            (menuBarSystemImage, nil)
+        }
+    }
+
     var primaryActionTitle: String {
         engine.isRunning ? "Pause" : "Start"
     }
@@ -375,6 +395,10 @@ final class AppModel: ObservableObject {
                 body: "Ready for focus"
             )
         }
+    }
+
+    func previewSound(_ sound: TimerSound) {
+        soundService.play(sound)
     }
 
     private func configureShortcuts() {

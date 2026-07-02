@@ -42,15 +42,25 @@ private struct MenuBarClockLabel: View {
     @Environment(\.openWindow) private var openWindow
     @State private var didOpenAtLaunch = false
 
+    private var isIdle: Bool {
+        app.engine.phase == .ready || app.engine.phase == .completed
+    }
+
+    private var showsCountdown: Bool {
+        !isIdle || app.preferences.showCountdownWhenIdle
+    }
+
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: app.menuBarSystemImage)
+            menuBarIcon
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.phase(app.engine.displayPhase))
-            Text(app.menuBarTitle)
-                .font(.system(.body, design: .rounded).monospacedDigit().weight(.medium))
+            if showsCountdown {
+                Text(app.menuBarTitle)
+                    .font(.system(.body, design: .rounded).monospacedDigit().weight(.medium))
+            }
         }
-        .accessibilityLabel("FocusFlow timer \(app.menuBarTitle)")
+        .accessibilityLabel(showsCountdown ? "FocusFlow timer \(app.menuBarTitle)" : "FocusFlow timer, idle")
         .task {
             // The menu-bar label is the only view guaranteed to instantiate at
             // launch in an .accessory app, so it drives the "open window at
@@ -65,6 +75,16 @@ private struct MenuBarClockLabel: View {
                 NSApplication.shared.activate(ignoringOtherApps: true)
                 openWindow(id: "timer")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var menuBarIcon: some View {
+        let icon = app.menuBarIcon
+        if let variableValue = icon.variableValue {
+            Image(systemName: icon.systemName, variableValue: variableValue)
+        } else {
+            Image(systemName: icon.systemName)
         }
     }
 }

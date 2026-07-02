@@ -1,3 +1,4 @@
+import Charts
 import FocusFlowCore
 import SwiftUI
 
@@ -34,6 +35,18 @@ struct StatisticsView: View {
                 .padding(.vertical, 10)
 
             Divider()
+
+            // The chart plots one bar per day, so it's only meaningful across a
+            // multi-day range. On the Day period a single day-unit bar stretches
+            // across the whole plot as one giant block, so hide it there.
+            if period != .day && !filteredRecords.isEmpty {
+                chartSection
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .frame(height: 180)
+
+                Divider()
+            }
 
             sessionList
         }
@@ -130,6 +143,34 @@ struct StatisticsView: View {
                 value: "\(summary.interruptionCount)",
                 color: .orange
             )
+        }
+    }
+
+    // MARK: - Chart
+
+    private var chartSection: some View {
+        Chart {
+            ForEach(groupedRecords, id: \.day) { group in
+                let focusSeconds = group.records
+                    .filter { $0.phase == .focus }
+                    .reduce(0) { $0 + $1.actualSeconds }
+                
+                BarMark(
+                    x: .value("Date", group.day, unit: .day),
+                    y: .value("Focus Time (hours)", Double(focusSeconds) / 3600.0)
+                )
+                .foregroundStyle(Color.accentColor.gradient)
+            }
+        }
+        .chartYAxis {
+            AxisMarks { value in
+                AxisGridLine()
+                if let val = value.as(Double.self) {
+                    AxisValueLabel {
+                        Text("\(val, specifier: "%.1f")h")
+                    }
+                }
+            }
         }
     }
 

@@ -12,6 +12,7 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
     public var focusCompleteSound: TimerSound
     public var breakCompleteSound: TimerSound
     public var showWindowAtLaunch: Bool
+    public var showCountdownWhenIdle: Bool
 
     public init(
         focusMinutes: Int = 25,
@@ -24,7 +25,8 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         soundsEnabled: Bool = true,
         focusCompleteSound: TimerSound = .ping,
         breakCompleteSound: TimerSound = .glass,
-        showWindowAtLaunch: Bool = false
+        showWindowAtLaunch: Bool = false,
+        showCountdownWhenIdle: Bool = true
     ) {
         self.focusMinutes = focusMinutes
         self.shortBreakMinutes = shortBreakMinutes
@@ -37,7 +39,46 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         self.focusCompleteSound = focusCompleteSound
         self.breakCompleteSound = breakCompleteSound
         self.showWindowAtLaunch = showWindowAtLaunch
+        self.showCountdownWhenIdle = showCountdownWhenIdle
         self.validate()
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case focusMinutes
+        case shortBreakMinutes
+        case longBreakMinutes
+        case sessionsBeforeLongBreak
+        case autoStartBreaks
+        case autoStartFocus
+        case notificationsEnabled
+        case soundsEnabled
+        case focusCompleteSound
+        case breakCompleteSound
+        case showWindowAtLaunch
+        case showCountdownWhenIdle
+    }
+
+    // Explicit decoding so that JSON persisted before `showCountdownWhenIdle`
+    // was introduced still decodes successfully — a missing key must default
+    // to `true` rather than throwing and sending PreferencesStore.load() down
+    // its all-defaults fallback path (which would silently wipe the user's
+    // real settings). Other fields keep strict decoding since they've always
+    // been present in persisted payloads.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        focusMinutes = try container.decode(Int.self, forKey: .focusMinutes)
+        shortBreakMinutes = try container.decode(Int.self, forKey: .shortBreakMinutes)
+        longBreakMinutes = try container.decode(Int.self, forKey: .longBreakMinutes)
+        sessionsBeforeLongBreak = try container.decode(Int.self, forKey: .sessionsBeforeLongBreak)
+        autoStartBreaks = try container.decode(Bool.self, forKey: .autoStartBreaks)
+        autoStartFocus = try container.decode(Bool.self, forKey: .autoStartFocus)
+        notificationsEnabled = try container.decode(Bool.self, forKey: .notificationsEnabled)
+        soundsEnabled = try container.decode(Bool.self, forKey: .soundsEnabled)
+        focusCompleteSound = try container.decode(TimerSound.self, forKey: .focusCompleteSound)
+        breakCompleteSound = try container.decode(TimerSound.self, forKey: .breakCompleteSound)
+        showWindowAtLaunch = try container.decode(Bool.self, forKey: .showWindowAtLaunch)
+        showCountdownWhenIdle = try container.decodeIfPresent(Bool.self, forKey: .showCountdownWhenIdle) ?? true
+        validate()
     }
 
     public var focusSeconds: Int { focusMinutes * 60 }
