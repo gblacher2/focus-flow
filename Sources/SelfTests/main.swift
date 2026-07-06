@@ -108,9 +108,9 @@ t.group("SessionPreset") {
 // MARK: - TimerPreferences decoding tests
 
 t.group("TimerPreferences decoding") {
-    // Backward compatibility: JSON persisted before `showWindowAtLaunch`
-    // existed must still decode — a missing key should default to false
-    // not throw (which would send PreferencesStore.load() down its
+    // Backward compatibility: JSON persisted before the newer menu bar/window
+    // visibility flags existed must still decode. Missing keys should default
+    // to false, not throw (which would send PreferencesStore.load() down its
     // all-defaults fallback and silently wipe the user's real settings).
     let oldShapeJSON = """
     {
@@ -140,6 +140,7 @@ t.group("TimerPreferences decoding") {
         t.checkEqual(decoded.focusCompleteSound, .hero, "old-shape JSON preserves focusCompleteSound")
         t.checkEqual(decoded.breakCompleteSound, .pop, "old-shape JSON preserves breakCompleteSound")
         t.checkEqual(decoded.showWindowAtLaunch, false, "old-shape JSON defaults showWindowAtLaunch to false")
+        t.checkEqual(decoded.showCountdownWhenIdle, false, "old-shape JSON defaults showCountdownWhenIdle to false")
     } catch {
         t.check(false, "decoding old-shape JSON threw: \(error)")
     }

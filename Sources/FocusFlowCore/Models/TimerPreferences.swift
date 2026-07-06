@@ -12,6 +12,7 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
     public var focusCompleteSound: TimerSound
     public var breakCompleteSound: TimerSound
     public var showWindowAtLaunch: Bool
+    public var showCountdownWhenIdle: Bool
 
     public init(
         focusMinutes: Int = 25,
@@ -24,7 +25,8 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         soundsEnabled: Bool = true,
         focusCompleteSound: TimerSound = .ping,
         breakCompleteSound: TimerSound = .glass,
-        showWindowAtLaunch: Bool = false
+        showWindowAtLaunch: Bool = false,
+        showCountdownWhenIdle: Bool = false
     ) {
         self.focusMinutes = focusMinutes
         self.shortBreakMinutes = shortBreakMinutes
@@ -37,6 +39,7 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         self.focusCompleteSound = focusCompleteSound
         self.breakCompleteSound = breakCompleteSound
         self.showWindowAtLaunch = showWindowAtLaunch
+        self.showCountdownWhenIdle = showCountdownWhenIdle
         self.validate()
     }
 
@@ -52,13 +55,15 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         case focusCompleteSound
         case breakCompleteSound
         case showWindowAtLaunch
+        case showCountdownWhenIdle
     }
 
-    // Explicit decoding so that JSON persisted before `showWindowAtLaunch`
-    // existed can still decode cleanly by defaulting to false, rather than throwing and sending PreferencesStore.load() down
-    // its all-defaults fallback path (which would silently wipe the user's
-    // real settings). Other fields keep strict decoding since they've always
-    // been present in persisted payloads.
+    // Explicit decoding so that JSON persisted before newer preference keys
+    // existed can still decode cleanly by defaulting them, rather than
+    // throwing and sending PreferencesStore.load() down its all-defaults
+    // fallback path (which would silently wipe the user's real settings).
+    // Other fields keep strict decoding since they've always been present in
+    // persisted payloads.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         focusMinutes = try container.decode(Int.self, forKey: .focusMinutes)
@@ -72,6 +77,7 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         focusCompleteSound = try container.decode(TimerSound.self, forKey: .focusCompleteSound)
         breakCompleteSound = try container.decode(TimerSound.self, forKey: .breakCompleteSound)
         showWindowAtLaunch = try container.decodeIfPresent(Bool.self, forKey: .showWindowAtLaunch) ?? false
+        showCountdownWhenIdle = try container.decodeIfPresent(Bool.self, forKey: .showCountdownWhenIdle) ?? false
         validate()
     }
 

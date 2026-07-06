@@ -8,8 +8,8 @@ import SwiftUI
 /// full control over mouse events:
 ///
 /// - **Left-click**: shows the dropdown menu (same actions as the old MenuBarView).
-/// - **Right-click while paused**: resumes immediately via `app.toggleTimer()`.
-/// - **Right-click otherwise**: shows the dropdown menu (same as left-click).
+/// - **Right-click while not running**: resumes immediately or starts the next phase.
+/// - **Right-click while running**: shows the dropdown menu (same as left-click).
 @MainActor
 final class StatusItemController: NSObject {
     private let statusItem: NSStatusItem
@@ -44,13 +44,11 @@ final class StatusItemController: NSObject {
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         guard let event = NSApp.currentEvent else { return }
 
-        if event.type == .rightMouseUp, app.engine.phase == .paused {
-            // Right-click while paused → resume immediately
-            app.toggleTimer()
+        if event.type == .rightMouseUp, app.performStatusItemSecondaryAction() {
             return
         }
 
-        // Left-click (or right-click when not paused) → show menu
+        // Left-click, or right-click while a phase is already running, shows the menu.
         let menu = buildMenu()
         statusItem.menu = menu
         sender.performClick(nil)   // re-triggers the click, which now opens the menu
@@ -63,7 +61,7 @@ final class StatusItemController: NSObject {
         guard let button = statusItem.button else { return }
 
         let phase = app.engine.displayPhase
-        let isIdle = app.engine.phase == .ready || app.engine.phase == .completed
+        let showsCountdown = app.showsMenuBarCountdown
 
         // --- Icon ---
         let iconName: String
@@ -95,7 +93,7 @@ final class StatusItemController: NSObject {
         button.image?.isTemplate = false
 
         // --- Title (countdown text) ---
-        if !isIdle {
+        if showsCountdown {
             let font = NSFont.monospacedDigitSystemFont(
                 ofSize: NSFont.systemFontSize, weight: .medium
             )
@@ -108,9 +106,21 @@ final class StatusItemController: NSObject {
         }
 
         // --- Accessibility ---
-        let label = isIdle
-            ? "FocusFlow timer, idle"
-            : "FocusFlow timer \(DurationFormatter.clock(app.engine.remainingSeconds))"
+        let label: String
+        if showsCountdown {
+            label = "FocusFlow timer \(DurationFormatter.clock(app.engine.remainingSeconds))"
+        } else {
+            switch app.engine.phase {
+            case .paused:
+                label = "FocusFlow timer, paused"
+            case .completed:
+                label = "FocusFlow timer, next \(app.engine.pendingPhase.displayName)"
+            case .ready:
+                label = "FocusFlow timer, idle"
+            case .focus, .shortBreak, .longBreak:
+                label = "FocusFlow timer"
+            }
+        }
         button.setAccessibilityLabel(label)
     }
 
