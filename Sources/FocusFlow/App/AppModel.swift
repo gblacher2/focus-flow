@@ -16,12 +16,17 @@ final class AppModel: ObservableObject {
     @Published private(set) var shortcutStatus: ShortcutService.Status = .inactive
     @Published private(set) var notificationPermissionStatus: NotificationPermissionStatus = .unknown
 
-    /// Opens the timer window. Wired up by `MenuBarClockLabel` in FocusFlowApp.swift,
-    /// since the menu-bar label is the only view guaranteed to exist at launch in this
-    /// .accessory app — it captures `@Environment(\.openWindow)` and hands it back here
-    /// so AppModel (which has no SwiftUI environment of its own) can reopen a closed
-    /// timer window from the global Show Timer shortcut.
+    /// Closures that open SwiftUI-managed windows. Wired lazily by
+    /// `EnvironmentBridgeView` in AppDelegate.swift at launch. AppModel
+    /// and StatusItemController can call these to open windows from
+    /// non-SwiftUI code.
     var openTimerWindow: (() -> Void)?
+    var openStatisticsWindow: (() -> Void)?
+    var openSettingsWindow: (() -> Void)?
+
+    /// The app's sole menu bar item. Created eagerly in `init()` so it
+    /// exists immediately, even before any SwiftUI window opens.
+    private(set) var statusItemController: StatusItemController?
 
     private let sessionStore: SessionStore?
     private let runtimeStore: RuntimeStore?
@@ -31,6 +36,7 @@ final class AppModel: ObservableObject {
     private let shortcutService = ShortcutService()
     private var ticker: Foundation.Timer?
     private var didBecomeActiveTask: Task<Void, Never>?
+    private var integrationBridge: IntegrationBridge?
 
     init() {
         let loadedPreferences = preferenceStore.load()
@@ -49,6 +55,13 @@ final class AppModel: ObservableObject {
         Task { await refreshNotificationPermissionStatus() }
         configureShortcuts()
         observeAppActivation()
+        statusItemController = StatusItemController(app: self)
+
+        if let delegate = NSApp.delegate as? AppDelegate {
+            delegate.attachIfNeeded(app: self)
+        }
+        
+        self.integrationBridge = IntegrationBridge(app: self)
     }
 
     deinit {
@@ -118,6 +131,12 @@ final class AppModel: ObservableObject {
     var progress: Double {
         guard engine.plannedSeconds > 0 else { return 0 }
         return 1 - (Double(engine.remainingSeconds) / Double(engine.plannedSeconds))
+    }
+
+    /// Shows the countdown only while a phase is actively ticking down, unless
+    /// the user explicitly opts into seeing it while the timer is not running.
+    var showsMenuBarCountdown: Bool {
+        engine.isRunning || preferences.showCountdownWhenIdle
     }
 
     func toggleTimer() {
@@ -275,6 +294,15 @@ final class AppModel: ObservableObject {
         case .showTimer:
             showTimerWindowIfAvailable()
         }
+    }
+
+    /// The status item's secondary click should immediately resume a paused
+    /// phase or start the next pending phase when nothing is actively running.
+    @discardableResult
+    func performStatusItemSecondaryAction() -> Bool {
+        guard !engine.isRunning else { return false }
+        toggleTimer()
+        return true
     }
 
     /// Runs the per-second ticker only while a phase is actually counting down.
@@ -437,6 +465,7 @@ final class AppModel: ObservableObject {
     private func persistRuntime() {
         do {
             try runtimeStore?.save(engine)
+            integrationBridge?.postStateChanged()
         } catch {
             errorMessage = error.localizedDescription
         }
