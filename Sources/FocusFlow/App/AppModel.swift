@@ -57,10 +57,22 @@ final class AppModel: ObservableObject {
         observeAppActivation()
         statusItemController = StatusItemController(app: self)
 
-        if let delegate = NSApp.delegate as? AppDelegate {
-            delegate.attachIfNeeded(app: self)
+        // `NSApp.delegate as? AppDelegate` can never succeed under the SwiftUI
+        // lifecycle — SwiftUI installs its own forwarding delegate — so the
+        // adaptor-created instance is reached via AppDelegate.shared. That
+        // instance does not exist yet while this @StateObject-owned model
+        // initializes, so look it up on the next run-loop pass, once app
+        // setup has completed. A wiring failure would silently leave the
+        // window-opening closures unwired, so make it visible.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let delegate = AppDelegate.shared {
+                delegate.attachIfNeeded(app: self)
+            } else {
+                AppDelegate.bridgeLog.fault("AppDelegate.shared is unset — environment bridge cannot attach")
+            }
         }
-        
+
         self.integrationBridge = IntegrationBridge(app: self)
     }
 

@@ -62,7 +62,12 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
     // existed can still decode cleanly by defaulting them, rather than
     // throwing and sending PreferencesStore.load() down its all-defaults
     // fallback path (which would silently wipe the user's real settings).
-    // Other fields keep strict decoding since they've always been present in
+    // Missing-key defaults mirror each key's pre-key behavior, not the
+    // fresh-install defaults: installs that predate `showCountdownWhenIdle`
+    // always showed the idle countdown, so a missing key must decode as
+    // `true`; the app never opened the window at launch before
+    // `showWindowAtLaunch`, so a missing key decodes as `false`. Other
+    // fields keep strict decoding since they've always been present in
     // persisted payloads.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -77,7 +82,7 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         focusCompleteSound = try container.decode(TimerSound.self, forKey: .focusCompleteSound)
         breakCompleteSound = try container.decode(TimerSound.self, forKey: .breakCompleteSound)
         showWindowAtLaunch = try container.decodeIfPresent(Bool.self, forKey: .showWindowAtLaunch) ?? false
-        showCountdownWhenIdle = try container.decodeIfPresent(Bool.self, forKey: .showCountdownWhenIdle) ?? false
+        showCountdownWhenIdle = try container.decodeIfPresent(Bool.self, forKey: .showCountdownWhenIdle) ?? true
         validate()
     }
 

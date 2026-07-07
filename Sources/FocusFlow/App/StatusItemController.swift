@@ -42,9 +42,10 @@ final class StatusItemController: NSObject {
     // MARK: - Click Handling
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
-        guard let event = NSApp.currentEvent else { return }
-
-        if event.type == .rightMouseUp, app.performStatusItemSecondaryAction() {
+        // Only the right-click branch needs the event. VoiceOver and other
+        // programmatic activations arrive with no current event — those must
+        // fall through to the menu, not be dropped.
+        if NSApp.currentEvent?.type == .rightMouseUp, app.performStatusItemSecondaryAction() {
             return
         }
 
@@ -57,58 +58,31 @@ final class StatusItemController: NSObject {
 
     // MARK: - Appearance
 
+    /// The last-applied button state. `updateAppearance()` runs on every
+    /// `objectWillChange` (several per user action, once per second while
+    /// running), so parts whose inputs haven't changed are not re-applied —
+    /// in particular the NSImage + symbol-configuration rebuild.
+    private struct Appearance: Equatable {
+        var iconName: String
+        var variableValue: Double?
+        var phase: TimerPhase
+        var title: String
+        var accessibilityLabel: String
+    }
+
+    private var lastAppearance: Appearance?
+
     private func updateAppearance() {
         guard let button = statusItem.button else { return }
 
         let phase = app.engine.displayPhase
         let showsCountdown = app.showsMenuBarCountdown
+        let icon = app.menuBarIcon
 
-        // --- Icon ---
-        let iconName: String
-        if app.engine.isRunning {
-            iconName = AppModel.menuBarProgressSystemImage
-        } else {
-            iconName = app.menuBarSystemImage
-        }
-
-        let nsColor = NSColor(Color.phase(phase))
-        var config = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        config = config.applying(.init(paletteColors: [nsColor]))
-        if app.engine.isRunning {
-            config = config.applying(.init(hierarchicalColor: nsColor))
-        }
-
-        if app.engine.isRunning {
-            button.image = NSImage(
-                systemSymbolName: iconName,
-                variableValue: app.progress,
-                accessibilityDescription: "FocusFlow"
-            )?.withSymbolConfiguration(config)
-        } else {
-            button.image = NSImage(
-                systemSymbolName: iconName,
-                accessibilityDescription: "FocusFlow"
-            )?.withSymbolConfiguration(config)
-        }
-        button.image?.isTemplate = false
-
-        // --- Title (countdown text) ---
-        if showsCountdown {
-            let font = NSFont.monospacedDigitSystemFont(
-                ofSize: NSFont.systemFontSize, weight: .medium
-            )
-            button.attributedTitle = NSAttributedString(
-                string: " \(DurationFormatter.clock(app.engine.remainingSeconds))",
-                attributes: [.font: font]
-            )
-        } else {
-            button.title = ""
-        }
-
-        // --- Accessibility ---
+        let title = showsCountdown ? " \(app.menuBarTitle)" : ""
         let label: String
         if showsCountdown {
-            label = "FocusFlow timer \(DurationFormatter.clock(app.engine.remainingSeconds))"
+            label = "FocusFlow timer \(app.menuBarTitle)"
         } else {
             switch app.engine.phase {
             case .paused:
@@ -121,7 +95,59 @@ final class StatusItemController: NSObject {
                 label = "FocusFlow timer"
             }
         }
-        button.setAccessibilityLabel(label)
+
+        let next = Appearance(
+            iconName: icon.systemName,
+            variableValue: icon.variableValue,
+            phase: phase,
+            title: title,
+            accessibilityLabel: label
+        )
+        guard next != lastAppearance else { return }
+        let last = lastAppearance
+        lastAppearance = next
+
+        // --- Icon ---
+        if next.iconName != last?.iconName
+            || next.variableValue != last?.variableValue
+            || next.phase != last?.phase {
+            let nsColor = NSColor(Color.phase(phase))
+            var config = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+            config = config.applying(.init(paletteColors: [nsColor]))
+            // variableValue is non-nil only while running; hierarchical color
+            // dims the unfilled portion of the progress glyph.
+            if icon.variableValue != nil {
+                config = config.applying(.init(hierarchicalColor: nsColor))
+            }
+            // A non-variable symbol ignores variableValue, so one construction
+            // path covers both states.
+            button.image = NSImage(
+                systemSymbolName: icon.systemName,
+                variableValue: icon.variableValue ?? 0,
+                accessibilityDescription: "FocusFlow"
+            )?.withSymbolConfiguration(config)
+            button.image?.isTemplate = false
+        }
+
+        // --- Title (countdown text) ---
+        if next.title != last?.title {
+            if title.isEmpty {
+                button.title = ""
+            } else {
+                let font = NSFont.monospacedDigitSystemFont(
+                    ofSize: NSFont.systemFontSize, weight: .medium
+                )
+                button.attributedTitle = NSAttributedString(
+                    string: title,
+                    attributes: [.font: font]
+                )
+            }
+        }
+
+        // --- Accessibility ---
+        if next.accessibilityLabel != last?.accessibilityLabel {
+            button.setAccessibilityLabel(label)
+        }
     }
 
     // MARK: - Menu Construction
@@ -130,10 +156,10 @@ final class StatusItemController: NSObject {
         let menu = NSMenu()
 
         // ── Status header ──
-        let statusItem = NSMenuItem()
-        statusItem.title = statusLine
-        statusItem.isEnabled = false
-        menu.addItem(statusItem)
+        let headerItem = NSMenuItem()
+        headerItem.title = statusLine
+        headerItem.isEnabled = false
+        menu.addItem(headerItem)
 
         if let detail = detailLine {
             let detailItem = NSMenuItem()
