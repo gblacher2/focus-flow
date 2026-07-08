@@ -108,10 +108,12 @@ t.group("SessionPreset") {
 // MARK: - TimerPreferences decoding tests
 
 t.group("TimerPreferences decoding") {
-    // Backward compatibility: JSON persisted before `showCountdownWhenIdle`
-    // existed must still decode — a missing key should default to `true`,
-    // not throw (which would send PreferencesStore.load() down its
-    // all-defaults fallback and silently wipe the user's real settings).
+    // Backward compatibility: JSON persisted before the newer menu bar/window
+    // visibility flags existed must still decode, not throw (which would send
+    // PreferencesStore.load() down its all-defaults fallback and silently wipe
+    // the user's real settings). Missing keys default to each key's pre-key
+    // behavior: showCountdownWhenIdle to true (old installs always showed the
+    // idle countdown), showWindowAtLaunch to false.
     let oldShapeJSON = """
     {
         "focusMinutes": 42,
@@ -123,14 +125,12 @@ t.group("TimerPreferences decoding") {
         "notificationsEnabled": false,
         "soundsEnabled": true,
         "focusCompleteSound": "Hero",
-        "breakCompleteSound": "Pop",
-        "showWindowAtLaunch": true
+        "breakCompleteSound": "Pop"
     }
     """.data(using: .utf8)!
 
     do {
         let decoded = try JSONDecoder().decode(TimerPreferences.self, from: oldShapeJSON)
-        t.checkEqual(decoded.showCountdownWhenIdle, true, "old-shape JSON without showCountdownWhenIdle defaults to true")
         t.checkEqual(decoded.focusMinutes, 42, "old-shape JSON preserves focusMinutes")
         t.checkEqual(decoded.shortBreakMinutes, 7, "old-shape JSON preserves shortBreakMinutes")
         t.checkEqual(decoded.longBreakMinutes, 20, "old-shape JSON preserves longBreakMinutes")
@@ -141,18 +141,24 @@ t.group("TimerPreferences decoding") {
         t.checkEqual(decoded.soundsEnabled, true, "old-shape JSON preserves soundsEnabled")
         t.checkEqual(decoded.focusCompleteSound, .hero, "old-shape JSON preserves focusCompleteSound")
         t.checkEqual(decoded.breakCompleteSound, .pop, "old-shape JSON preserves breakCompleteSound")
-        t.checkEqual(decoded.showWindowAtLaunch, true, "old-shape JSON preserves showWindowAtLaunch")
+        t.checkEqual(decoded.showWindowAtLaunch, false, "old-shape JSON defaults showWindowAtLaunch to false")
+        t.checkEqual(decoded.showCountdownWhenIdle, true, "old-shape JSON defaults showCountdownWhenIdle to true")
     } catch {
-        t.check(false, "decoding old-shape JSON (no showCountdownWhenIdle key) threw: \(error)")
+        t.check(false, "decoding old-shape JSON threw: \(error)")
     }
 
-    // Full encode -> decode round-trip preserves showCountdownWhenIdle == false.
+    // Full encode → decode round-trip with non-default values, so a dropped
+    // or misnamed coding key can't hide behind the missing-key defaults.
     do {
         var prefs = TimerPreferences()
-        prefs.showCountdownWhenIdle = false
+        prefs.focusMinutes = 33
+        prefs.showCountdownWhenIdle = true
+        prefs.showWindowAtLaunch = true
         let data = try JSONEncoder().encode(prefs)
         let roundTripped = try JSONDecoder().decode(TimerPreferences.self, from: data)
-        t.checkEqual(roundTripped.showCountdownWhenIdle, false, "encode/decode round-trip preserves showCountdownWhenIdle == false")
+        t.checkEqual(roundTripped.focusMinutes, 33, "encode/decode round-trip preserves focusMinutes")
+        t.checkEqual(roundTripped.showCountdownWhenIdle, true, "encode/decode round-trip preserves showCountdownWhenIdle")
+        t.checkEqual(roundTripped.showWindowAtLaunch, true, "encode/decode round-trip preserves showWindowAtLaunch")
         t.checkEqual(roundTripped, prefs, "encode/decode round-trip preserves full TimerPreferences equality")
     } catch {
         t.check(false, "encode/decode round-trip threw: \(error)")

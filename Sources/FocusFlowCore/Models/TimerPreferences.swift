@@ -26,7 +26,7 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         focusCompleteSound: TimerSound = .ping,
         breakCompleteSound: TimerSound = .glass,
         showWindowAtLaunch: Bool = false,
-        showCountdownWhenIdle: Bool = true
+        showCountdownWhenIdle: Bool = false
     ) {
         self.focusMinutes = focusMinutes
         self.shortBreakMinutes = shortBreakMinutes
@@ -58,12 +58,17 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         case showCountdownWhenIdle
     }
 
-    // Explicit decoding so that JSON persisted before `showCountdownWhenIdle`
-    // was introduced still decodes successfully — a missing key must default
-    // to `true` rather than throwing and sending PreferencesStore.load() down
-    // its all-defaults fallback path (which would silently wipe the user's
-    // real settings). Other fields keep strict decoding since they've always
-    // been present in persisted payloads.
+    // Explicit decoding so that JSON persisted before newer preference keys
+    // existed can still decode cleanly by defaulting them, rather than
+    // throwing and sending PreferencesStore.load() down its all-defaults
+    // fallback path (which would silently wipe the user's real settings).
+    // Missing-key defaults mirror each key's pre-key behavior, not the
+    // fresh-install defaults: installs that predate `showCountdownWhenIdle`
+    // always showed the idle countdown, so a missing key must decode as
+    // `true`; the app never opened the window at launch before
+    // `showWindowAtLaunch`, so a missing key decodes as `false`. Other
+    // fields keep strict decoding since they've always been present in
+    // persisted payloads.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         focusMinutes = try container.decode(Int.self, forKey: .focusMinutes)
@@ -76,7 +81,7 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         soundsEnabled = try container.decode(Bool.self, forKey: .soundsEnabled)
         focusCompleteSound = try container.decode(TimerSound.self, forKey: .focusCompleteSound)
         breakCompleteSound = try container.decode(TimerSound.self, forKey: .breakCompleteSound)
-        showWindowAtLaunch = try container.decode(Bool.self, forKey: .showWindowAtLaunch)
+        showWindowAtLaunch = try container.decodeIfPresent(Bool.self, forKey: .showWindowAtLaunch) ?? false
         showCountdownWhenIdle = try container.decodeIfPresent(Bool.self, forKey: .showCountdownWhenIdle) ?? true
         validate()
     }

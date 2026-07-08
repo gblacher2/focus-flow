@@ -5,7 +5,7 @@
 A native macOS SwiftUI menu-bar-first Pomodoro timer. Quiet, calm, Mac-native utility — not flashy, not a dashboard. Inspired by Flow for macOS in spirit but with original design and code.
 
 **Bundle ID:** `com.gabrielblacher.FocusFlow`
-**Project path:** `/Users/gabrielblacher/Projects/focus-flow`
+**Project path:** `/Users/gabrielblacher/GitHub & Coding Projects/focus-flow`
 **Min deployment:** macOS 14 (Sonoma)
 **Build system:** SwiftPM (no Xcode project, Command Line Tools compatible)
 
@@ -19,13 +19,13 @@ focus-flow/
 ├── Sources/
 │   ├── FocusFlow/                         # App target (executable)
 │   │   ├── App/
-│   │   │   ├── FocusFlowApp.swift         # @main, Scene definitions (Window, MenuBarExtra, Settings)
+│   │   │   ├── FocusFlowApp.swift         # @main, Scene definitions (Window, Settings)
 │   │   │   ├── AppModel.swift             # Central @MainActor ObservableObject — all state & actions
-│   │   │   ├── AppDelegate.swift          # Sets activation policy to .accessory (menu-bar app)
+│   │   │   ├── AppDelegate.swift          # Sets activation policy to .accessory, hosts environment bridge
+│   │   │   ├── StatusItemController.swift  # Controls NSStatusItem and dropdown menu (AppKit)
 │   │   │   └── FocusFlowCommands.swift    # macOS menu bar Commands (Timer menu)
 │   │   ├── Views/
 │   │   │   ├── ContentView.swift          # Timer window — ring, controls, title/tag
-│   │   │   ├── MenuBarView.swift          # MenuBarExtra dropdown — status header, actions
 │   │   │   ├── SettingsView.swift         # Tabbed settings — Timer, Notifications, Tags, Shortcuts
 │   │   │   └── StatisticsView.swift       # Session history — summary tiles, filtered list, export
 │   │   ├── Services/
@@ -98,7 +98,7 @@ All views observe `AppModel` via `@ObservedObject`. Actions go through `AppModel
 | Timer Window | `"timer"` | 312×398 default |
 | Statistics Window | `"statistics"` | 740×520 default |
 | Settings | native `Settings` scene | 460×400 |
-| MenuBarExtra | — | dropdown menu |
+| NSStatusItem (AppKit) | — | AppKit menu bar icon & dropdown menu |
 
 The app runs as `.accessory` (no dock icon) — it's menu-bar-first.
 
@@ -115,12 +115,14 @@ The app runs as `.accessory` (no dock icon) — it's menu-bar-first.
 - **Title:** borderless centered `TextField`, placeholder "What are you working on?"
 - **Tag:** `Menu`-based picker with `Circle().fill()` color dots, `.menuStyle(.borderlessButton)`
 
-### Menu Bar (MenuBarView.swift)
-- **Icon + time** shown in menu bar (e.g. `● 23:15`); the countdown text is hidden when idle (`.ready`/`.completed`) if the "Show countdown in menu bar when idle" preference (Timer tab → Behavior, default on) is off — icon-only in that case. While a phase is running (focus or break), the icon becomes a progress-filling glyph (`circle.dotted.circle` with `variableValue` tracking `AppModel.progress`, 0→1) instead of the static symbol, with phase color (blue/green) still carrying the focus-vs-break distinction. Non-running states keep static symbols: `circle` (ready), `pause.circle` (paused), `checkmark.circle` (completed).
-- **Dropdown header:** one or two plain `Text` rows (native menu-item rendering — no HStack/layout tricks, since MenuBarExtra's menu style flattens custom layouts). Row 1 is always shown: composite status text, e.g. "Ready", "Focusing · 23:15", "Focus Paused · 23:15", "Next: Short Break". Row 2 appears only when a session title and/or tag is set, e.g. "Writing report · Study"
-- **Actions:** contextual labels — "Start Focus", "Pause Timer", "Resume", "Skip Phase", etc.
-- **Windows section:** Timer Window, Statistics, Settings…
-- **Quit:** "Quit FocusFlow"
+### Menu Bar (StatusItemController.swift)
+- **Icon + time** shown in menu bar (e.g. `● 23:15`) using a native AppKit `NSStatusItem` button. The countdown text is hidden whenever the timer is not running — idle (`.ready`/`.completed`) and `.paused` alike — unless the "Show countdown in menu bar when not running" preference (Settings → Timer tab → Behavior; default off for fresh installs, but a missing persisted key migrates to on) is enabled. While a phase is running (focus or break), the icon becomes a progress-filling glyph (`circle.dotted.circle` with a symbol configuration `variableValue` tracking `AppModel.progress`, 0→1) instead of the static symbol, with phase color (blue/green) still carrying the focus-vs-break distinction. Non-running states keep static symbols: `circle` (ready), `pause.circle` (paused), `checkmark.circle` (completed).
+- **Right-click shortcut**: Right-clicking the status item button in any non-running state acts immediately (via `app.toggleTimer()`) — it resumes when `.paused`, starts focus when `.ready`, and starts the next phase when `.completed`. Only while a phase is actively running does right-clicking behave exactly like left-clicking, opening the menu.
+- **Dropdown menu**: Built natively using `NSMenu` and `NSMenuItem` wrappers.
+  - **Header rows**: Row 1 is always shown as the composite status text, e.g. "Ready", "Focusing · 23:15", "Focus Paused · 23:15", "Next: Short Break". Row 2 appears only when a session title and/or tag is set, e.g. "Writing report · Study".
+  - **Actions**: Contextual labels like "Start Focus", "Pause Timer", "Resume", "Skip Phase", and "Reset Cycle".
+  - **Windows section**: Timer Window, Statistics, Settings…
+  - **Quit**: "Quit FocusFlow"
 
 ### Settings (SettingsView.swift)
 - 4 tabs: Timer, Notifications, Tags, Shortcuts
@@ -184,7 +186,7 @@ extension Color {
 ## Build & Verify
 
 ```bash
-cd /Users/gabrielblacher/Projects/focus-flow
+cd "/Users/gabrielblacher/GitHub & Coding Projects/focus-flow"
 
 # Build
 swift build

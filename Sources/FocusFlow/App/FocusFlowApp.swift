@@ -25,66 +25,13 @@ struct FocusFlowApp: App {
             SettingsView(app: app)
         }
 
-        MenuBarExtra {
-            MenuBarView(app: app)
-        } label: {
-            MenuBarClockLabel(app: app)
-        }
-
+        // The menu bar item is owned entirely by StatusItemController
+        // (an AppKit NSStatusItem), not by SwiftUI's MenuBarExtra, so that
+        // we can distinguish left-click from right-click reliably via
+        // sendAction(on:). See StatusItemController.swift.
+        //
         .commands {
             FocusFlowCommands(app: app)
-        }
-    }
-}
-
-private struct MenuBarClockLabel: View {
-    @ObservedObject var app: AppModel
-    @Environment(\.openWindow) private var openWindow
-    @State private var didOpenAtLaunch = false
-
-    private var isIdle: Bool {
-        app.engine.phase == .ready || app.engine.phase == .completed
-    }
-
-    private var showsCountdown: Bool {
-        !isIdle || app.preferences.showCountdownWhenIdle
-    }
-
-    var body: some View {
-        HStack(spacing: 4) {
-            menuBarIcon
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.phase(app.engine.displayPhase))
-            if showsCountdown {
-                Text(app.menuBarTitle)
-                    .font(.system(.body, design: .rounded).monospacedDigit().weight(.medium))
-            }
-        }
-        .accessibilityLabel(showsCountdown ? "FocusFlow timer \(app.menuBarTitle)" : "FocusFlow timer, idle")
-        .task {
-            // The menu-bar label is the only view guaranteed to instantiate at
-            // launch in an .accessory app, so it drives the "open window at
-            // launch" preference, and it hands AppModel a way to reopen the timer
-            // window (e.g. via ⌃⌥⌘F) after the user has closed it — AppModel has
-            // no SwiftUI environment of its own to call openWindow directly.
-            app.openTimerWindow = { openWindow(id: "timer") }
-
-            guard !didOpenAtLaunch else { return }
-            didOpenAtLaunch = true
-            if app.preferences.showWindowAtLaunch {
-                NSApplication.shared.activate(ignoringOtherApps: true)
-                openWindow(id: "timer")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var menuBarIcon: some View {
-        let icon = app.menuBarIcon
-        if let variableValue = icon.variableValue {
-            Image(systemName: icon.systemName, variableValue: variableValue)
-        } else {
-            Image(systemName: icon.systemName)
         }
     }
 }

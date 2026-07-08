@@ -70,7 +70,7 @@ struct SettingsView: View {
                 Toggle("Start breaks automatically", isOn: preferenceBinding(\.autoStartBreaks))
                 Toggle("Start focus automatically", isOn: preferenceBinding(\.autoStartFocus))
                 Toggle("Show timer window at launch", isOn: preferenceBinding(\.showWindowAtLaunch))
-                Toggle("Show countdown in menu bar when idle", isOn: preferenceBinding(\.showCountdownWhenIdle))
+                Toggle("Show countdown in menu bar when not running", isOn: preferenceBinding(\.showCountdownWhenIdle))
             }
         }
         .formStyle(.grouped)
