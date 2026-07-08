@@ -9,17 +9,25 @@ struct StatisticsView: View {
     @State private var showIncomplete = true
     @State private var showResetConfirmation = false
 
-    private var filteredRecords: [SessionRecord] {
-        StatisticsCalculator.records(
-            from: app.records,
-            period: period,
-            tagID: tagID,
-            showIncomplete: showIncomplete
-        )
+    // Cached derived data
+    @State private var filteredRecords: [SessionRecord] = []
+    @State private var groupedRecords: [(day: Date, records: [SessionRecord])] = []
+    @State private var summary: StatisticsSummary = StatisticsSummary()
+
+    private struct FilterParams: Equatable {
+        let period: StatisticsPeriod
+        let tagID: UUID?
+        let showIncomplete: Bool
+        let records: [SessionRecord]
     }
 
-    private var summary: StatisticsSummary {
-        StatisticsCalculator.summary(for: filteredRecords)
+    private var filterParams: FilterParams {
+        FilterParams(
+            period: period,
+            tagID: tagID,
+            showIncomplete: showIncomplete,
+            records: app.records
+        )
     }
 
     var body: some View {
@@ -56,6 +64,17 @@ struct StatisticsView: View {
             }
         } message: {
             Text("This will permanently delete all recorded sessions. This action cannot be undone.")
+        }
+        .onChange(of: filterParams, initial: true) { _, params in
+            let filtered = StatisticsCalculator.records(
+                from: params.records,
+                period: params.period,
+                tagID: params.tagID,
+                showIncomplete: params.showIncomplete
+            )
+            filteredRecords = filtered
+            groupedRecords = StatisticsCalculator.grouped(records: filtered)
+            summary = StatisticsCalculator.summary(for: filtered)
         }
     }
 
@@ -203,10 +222,6 @@ struct StatisticsView: View {
             }
         }
         .listStyle(.inset)
-    }
-
-    private var groupedRecords: [(day: Date, records: [SessionRecord])] {
-        StatisticsCalculator.grouped(records: filteredRecords)
     }
 
     private func tag(for id: UUID?) -> Tag? {
