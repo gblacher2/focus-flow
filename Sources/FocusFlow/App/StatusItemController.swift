@@ -9,7 +9,7 @@ import SwiftUI
 ///
 /// - **Left-click**: shows the dropdown menu (same actions as the old MenuBarView).
 /// - **Right-click while not running**: resumes immediately or starts the next phase.
-/// - **Right-click while running**: shows the dropdown menu (same as left-click).
+/// - **Right-click while running**: pauses the timer immediately.
 @MainActor
 final class StatusItemController: NSObject {
     private let statusItem: NSStatusItem
@@ -49,7 +49,7 @@ final class StatusItemController: NSObject {
             return
         }
 
-        // Left-click, or right-click while a phase is already running, shows the menu.
+        // Left-click shows the menu.
         let menu = buildMenu()
         statusItem.menu = menu
         sender.performClick(nil)   // re-triggers the click, which now opens the menu

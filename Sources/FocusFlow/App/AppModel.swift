@@ -308,11 +308,10 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// The status item's secondary click should immediately resume a paused
-    /// phase or start the next pending phase when nothing is actively running.
+    /// The status item's secondary click should immediately toggle the timer
+    /// (pause if running, or resume/start if idle/paused).
     @discardableResult
     func performStatusItemSecondaryAction() -> Bool {
-        guard !engine.isRunning else { return false }
         toggleTimer()
         return true
     }
