@@ -19,11 +19,13 @@ public enum StatisticsCalculator {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [SessionRecord] {
-        records
+        let interval = dateInterval(for: period, now: now, calendar: calendar)
+        return records
             .filter { record in
                 guard showIncomplete || record.completed else { return false }
                 if let tagID, record.tagID != tagID { return false }
-                return contains(record.startedAt, in: period, now: now, calendar: calendar)
+                guard let interval else { return true }
+                return interval.contains(record.startedAt)
             }
             .sorted { $0.startedAt > $1.startedAt }
     }
@@ -63,25 +65,27 @@ public enum StatisticsCalculator {
         }
     }
 
-    private static func contains(
-        _ date: Date,
-        in period: StatisticsPeriod,
+    private static func dateInterval(
+        for period: StatisticsPeriod,
         now: Date,
         calendar: Calendar
-    ) -> Bool {
+    ) -> DateInterval? {
         switch period {
         case .all:
-            true
+            return nil
         case .day:
-            calendar.isDate(date, inSameDayAs: now)
+            let start = calendar.startOfDay(for: now)
+            guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return nil }
+            return DateInterval(start: start, end: end)
         case .week:
-            calendar.component(.weekOfYear, from: date) == calendar.component(.weekOfYear, from: now) &&
-                calendar.component(.yearForWeekOfYear, from: date) == calendar.component(.yearForWeekOfYear, from: now)
+            guard let interval = calendar.dateInterval(of: .weekOfYear, for: now) else { return nil }
+            return interval
         case .month:
-            calendar.component(.month, from: date) == calendar.component(.month, from: now) &&
-                calendar.component(.year, from: date) == calendar.component(.year, from: now)
+            guard let interval = calendar.dateInterval(of: .month, for: now) else { return nil }
+            return interval
         case .year:
-            calendar.component(.year, from: date) == calendar.component(.year, from: now)
+            guard let interval = calendar.dateInterval(of: .year, for: now) else { return nil }
+            return interval
         }
     }
 }
