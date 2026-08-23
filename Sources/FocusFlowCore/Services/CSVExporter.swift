@@ -13,7 +13,8 @@ public enum CSVExporter {
             "planned_seconds",
             "actual_seconds",
             "completed",
-            "interruptions"
+            "interruptions",
+            "quality"
         ].joined(separator: ",")
 
         let rows = records.sorted { $0.startedAt < $1.startedAt }.map { record in
@@ -27,7 +28,8 @@ public enum CSVExporter {
                 String(record.plannedSeconds),
                 String(record.actualSeconds),
                 record.completed ? "true" : "false",
-                String(record.interruptionCount)
+                String(record.interruptionCount),
+                record.focusQuality.map { String($0) } ?? ""
             ].map(escape).joined(separator: ",")
         }
 

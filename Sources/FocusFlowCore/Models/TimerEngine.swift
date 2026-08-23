@@ -164,7 +164,9 @@ public struct TimerEngine: Codable, Equatable, Sendable {
 
     public mutating func applyPreferences(_ preferences: TimerPreferences, now: Date) {
         let preferences = preferences.validated()
-        guard !phase.isRunningPhase else { return }
+        // A paused phase owns a credited remaining duration. Unrelated settings
+        // edits (or even duration edits) apply to the next phase, not retroactively.
+        guard !phase.isRunningPhase, phase != .paused else { return }
         let next = phase == .completed ? pendingPhase : displayPhase
         remainingSeconds = duration(for: next, preferences: preferences)
         plannedSeconds = remainingSeconds

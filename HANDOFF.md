@@ -217,12 +217,8 @@ All three must pass after any change. The project uses Swift 6 strict concurrenc
 
 ## Areas Open for Further Design Work
 
-- **Typography polish** — font weights, sizes, spacing in all views
-- **Animations** — ring transitions, phase change animations, control feedback
-- **Window appearance** — vibrancy, materials, toolbar style
-- **Color refinement** — whether accent blue is the right focus color, dark mode tuning
-- **Statistics** — chart/graph for focus time (day-grouped headers already implemented)
-- **Empty states** — illustrations or more helpful guidance
-- **Accessibility** — Dynamic Type support (VoiceOver labels and Reduce Motion are already implemented in ContentView/ControlButtonStyle)
-- **Sound picker** — preview button in settings
-- **Onboarding** — first-launch experience (if needed)
+- **Typography polish** — extend the existing typography tokens consistently through Settings and Onboarding (timer and Statistics typography is already tokenized)
+- **Window appearance** — toolbar and window-chrome styling remains open (native vibrancy/material is already implemented)
+- **Color refinement** — subjective phase-palette and dark-mode tuning remains open (focus follows the system accent; break colors are centralized)
+- **Empty states** — richer illustrations or guidance remain open (basic guided empty states are already implemented)
+- **Accessibility** — Dynamic Type adaptation and validation remain open (VoiceOver labels and Reduce Motion behavior are already implemented across the key surfaces)

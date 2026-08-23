@@ -17,6 +17,22 @@ extension Color {
         }
     }
 
+    /// A subtle wash (10% opacity) of the canonical phase color.
+    static func phaseWash(_ phase: TimerPhase) -> Color {
+        Color.phase(phase).opacity(0.10)
+    }
+
+    /// The gradient used for the timer ring, derived from the canonical phase color.
+    static func phaseGradient(_ phase: TimerPhase) -> AngularGradient {
+        let base = Color.phase(phase)
+        return AngularGradient(
+            colors: [base.opacity(0.6), base],
+            center: .center,
+            startAngle: .degrees(0),
+            endAngle: .degrees(360)
+        )
+    }
+
     /// Canonical tag color resolved from a stored color name.
     static func tag(_ name: String) -> Color {
         switch name {

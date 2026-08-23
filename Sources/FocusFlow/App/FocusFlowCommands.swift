@@ -11,12 +11,12 @@ struct FocusFlowCommands: Commands {
             Button(app.primaryActionTitle) {
                 app.toggleTimer()
             }
-            .keyboardShortcut(.space, modifiers: [.command, .option, .control])
+            .optionalKeyboardShortcut(app.preferences.toggleShortcut.swiftUIKeyEquivalent, modifiers: app.preferences.toggleShortcut.swiftUIModifiers)
 
             Button("Skip") {
                 app.skip()
             }
-            .keyboardShortcut(.rightArrow, modifiers: [.command, .option, .control])
+            .optionalKeyboardShortcut(app.preferences.skipShortcut.swiftUIKeyEquivalent, modifiers: app.preferences.skipShortcut.swiftUIModifiers)
 
             Button("Previous") {
                 app.previous()
@@ -25,7 +25,7 @@ struct FocusFlowCommands: Commands {
             Button("Reset Cycle") {
                 app.resetCycle()
             }
-            .keyboardShortcut("r", modifiers: [.command, .option, .control])
+            .optionalKeyboardShortcut(app.preferences.resetShortcut.swiftUIKeyEquivalent, modifiers: app.preferences.resetShortcut.swiftUIModifiers)
 
             Divider()
 
@@ -33,7 +33,7 @@ struct FocusFlowCommands: Commands {
                 NSApplication.shared.activate(ignoringOtherApps: true)
                 openWindow(id: "timer")
             }
-            .keyboardShortcut("f", modifiers: [.command, .option, .control])
+            .optionalKeyboardShortcut(app.preferences.showTimerShortcut.swiftUIKeyEquivalent, modifiers: app.preferences.showTimerShortcut.swiftUIModifiers)
 
             Button("Statistics") {
                 NSApplication.shared.activate(ignoringOtherApps: true)
@@ -45,6 +45,17 @@ struct FocusFlowCommands: Commands {
                 openSettings()
             }
             .keyboardShortcut(",", modifiers: [.command])
+        }
+    }
+}
+
+extension Button {
+    @ViewBuilder
+    func optionalKeyboardShortcut(_ keyEquivalent: KeyEquivalent?, modifiers: EventModifiers) -> some View {
+        if let keyEquivalent {
+            self.keyboardShortcut(keyEquivalent, modifiers: modifiers)
+        } else {
+            self
         }
     }
 }
