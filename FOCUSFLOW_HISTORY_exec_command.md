@@ -7,53 +7,53 @@
 
 ## 2. My requests
 
-- `"lets program a pomodoro timer with similar functions as the "flow" app currently installed on my mac - it should work in a similar way"`  
-  Outcome: `PARTIAL`  
+- `"lets program a pomodoro timer with similar functions as the "flow" app currently installed on my mac - it should work in a similar way"`
+  Outcome: `PARTIAL`
   Notes: this produced a detailed implementation plan first; the app was built only after the later explicit implementation request.
 
-- `"PLEASE IMPLEMENT THIS PLAN: # FocusFlow Native Pomodoro App ..."`  
-  Outcome: `DONE`  
-  Notes: the app was implemented at `/Users/gabrielblacher/Documents/Codex/focus-flow`, built, tested, and launched.
+- `"PLEASE IMPLEMENT THIS PLAN: # FocusFlow Native Pomodoro App ..."`
+  Outcome: `DONE`
+  Notes: the app was implemented in the repository, built, tested, and launched.
 
-- `"execute with "high" level reasoning"`  
-  Outcome: `DONE`  
+- `"execute with "high" level reasoning"`
+  Outcome: `DONE`
   Notes: the implementation continued under that instruction.
 
-- `"give me a prompt + handoff so other model can improve the UX - building from the inspiration app we used and what you actually delivered"`  
+- `"give me a prompt + handoff so other model can improve the UX - building from the inspiration app we used and what you actually delivered"`
   Outcome: `DONE`
 
-- `"Project: /Users/gabrielblacher/Documents/Codex/focus-flow ... Build and run the app, then do a thorough visual and functional review ... Fix anything that looks off."`  
-  Outcome: `DONE`  
+- `"Build and run the app, then do a thorough visual and functional review ... Fix anything that looks off."`
+  Outcome: `DONE`
   Notes: fixes included VoiceOver wording, quieter Reduce Motion behavior, removing a stray ring dot, removing blank-looking statistics stripes, and bringing the existing timer window forward on shortcut.
 
-- `"ok, how do i install it?"`  
+- `"ok, how do i install it?"`
   Outcome: `DONE`
 
-- `"yes pls"`  
-  Outcome: `DONE`  
+- `"yes pls"`
+  Outcome: `DONE`
   Notes: FocusFlow was copied to `/Applications/FocusFlow.app` and launched.
 
-- `"lets plan some improvements: ... 1) ... border size below is inconsistent ... 2) overall, lets make it slimmer ... 3) tag colors should appear on the timer ... 4) we need a timer clock on the menu bar ... before implementing: install/configure any tools you may need ... follow liquid glass "guidelines"`  
-  Outcome: `PARTIAL`  
+- `"lets plan some improvements: ... 1) ... border size below is inconsistent ... 2) overall, lets make it slimmer ... 3) tag colors should appear on the timer ... 4) we need a timer clock on the menu bar ... before implementing: install/configure any tools you may need ... follow liquid glass "guidelines"`
+  Outcome: `PARTIAL`
   Notes: the initial attempt was interrupted; a formal UX refinement plan was later produced. I did not find evidence that extra tools were installed during that planning step.
 
-- `"try again"`  
-  Outcome: `DONE`  
+- `"try again"`
+  Outcome: `DONE`
   Notes: used to resume the interrupted planning attempt.
 
-- `"try again"`  
-  Outcome: `DONE`  
+- `"try again"`
+  Outcome: `DONE`
   Notes: used to resume the interrupted planning attempt.
 
-- `"try again"`  
-  Outcome: `DONE`  
+- `"try again"`
+  Outcome: `DONE`
   Notes: this led to the explicit UX refinement plan being produced.
 
-- `"PLEASE IMPLEMENT THIS PLAN: # FocusFlow UX Refinement Plan ..."`  
-  Outcome: `PARTIAL`  
+- `"PLEASE IMPLEMENT THIS PLAN: # FocusFlow UX Refinement Plan ..."`
+  Outcome: `PARTIAL`
   Notes: the refinement was implemented and verified, but the final tiny Statistics label fix was not rebuilt/reinstalled into `/Applications` because approval credits ran out after the last source-only tweak.
 
-- `"In /Users/gabrielblacher/Documents/Codex/focus-flow, make notification setup explicit. Show the current macOS notification permission status in Settings, add a button to open the right system settings when permission is denied, and make the notifications section clear enough that I’ll know immediately why phase alerts are or aren’t appearing."`  
+- `"Make notification setup explicit. Show the current macOS notification permission status in Settings, add a button to open the right system settings when permission is denied, and make the notifications section clear enough that I’ll know immediately why phase alerts are or aren’t appearing."`
   Outcome: `DONE`
 
 ## 3. Decisions and constraints

@@ -5,7 +5,7 @@
 A native macOS SwiftUI menu-bar-first Pomodoro timer. Quiet, calm, Mac-native utility — not flashy, not a dashboard. Inspired by Flow for macOS in spirit but with original design and code.
 
 **Bundle ID:** `com.gabrielblacher.FocusFlow`
-**Project path:** `/Users/gabrielblacher/GitHub & Coding Projects/focus-flow`
+**Project path:** repository root
 **Min deployment:** macOS 14 (Sonoma)
 **Build system:** SwiftPM (no Xcode project, Command Line Tools compatible)
 
@@ -186,8 +186,7 @@ extension Color {
 ## Build & Verify
 
 ```bash
-cd "/Users/gabrielblacher/GitHub & Coding Projects/focus-flow"
-
+# From the repository root
 # Build
 swift build
 

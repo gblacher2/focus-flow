@@ -10,7 +10,7 @@
 - "after you finish, create a polished html of the "finished product"" -> **DONE**
 - "great, now some comments: - tag colors don't work (theyre all grey) in the main timer screen - i want the timer (minutes) to be in the menu bar (similar to flow)" -> **DONE**
 - "ok, give me a handoff file to claude code for it to help me with design" -> **DONE**
-- "I've ran out of limits on codex - help me continue here... Implemented the UX refinement pass in /Users/gabrielblacher/Documents/Codex/focus-flow." -> **DONE**
+- "I've ran out of limits on codex - help me continue here... Implemented the UX refinement pass in the FocusFlow repository." -> **DONE**
 - "how are we here?" -> **DONE**
 - "yes" -> **DONE**
 - "yes, make sure that there isn't a duplicate install of the app (only one install of this finished product) + give me a briefing to use gemini to create a logo for the app + create an HTML explaining all the final funcionalities so I can have it to share with others" -> **DONE**
