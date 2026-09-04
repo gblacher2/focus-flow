@@ -17,7 +17,7 @@ struct StatisticsView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // MARK: Caches
+    // MARK: Cached derived data
     @State private var overviewStreak: Int = 0
     @State private var overviewGoalProgress: Double = 0
     @State private var overviewGoalSeconds: Int = 0
@@ -26,18 +26,26 @@ struct StatisticsView: View {
 
     @State private var overviewBestHours: [Int] = []
     @State private var overviewPerTag: [TagFocusBucket] = []
+    @State private var filteredRecords: [SessionRecord] = []
+    @State private var groupedRecords: [(day: Date, records: [SessionRecord])] = []
+    @State private var summary: StatisticsSummary = StatisticsSummary()
 
-    private var filteredRecords: [SessionRecord] {
-        StatisticsCalculator.records(
-            from: app.records,
-            period: period,
-            tagID: tagID,
-            showIncomplete: showIncomplete
-        )
+    private struct FilterParams: Equatable {
+        let period: StatisticsPeriod
+        let tagID: UUID?
+        let showIncomplete: Bool
+        let records: [SessionRecord]
+        let dailyGoalMinutes: Int
     }
 
-    private var summary: StatisticsSummary {
-        StatisticsCalculator.summary(for: filteredRecords)
+    private var filterParams: FilterParams {
+        FilterParams(
+            period: period,
+            tagID: tagID,
+            showIncomplete: showIncomplete,
+            records: app.records,
+            dailyGoalMinutes: app.preferences.dailyGoalMinutes
+        )
     }
 
     var body: some View {
@@ -54,12 +62,6 @@ struct StatisticsView: View {
                 sessionsContent
             }
         }
-        .onAppear { refreshOverviewData() }
-        .onChange(of: app.records) { refreshOverviewData() }
-        .onChange(of: app.preferences.dailyGoalMinutes) { refreshOverviewData() }
-        .onChange(of: period) { refreshOverviewData() }
-        .onChange(of: tagID) { refreshOverviewData() }
-        .onChange(of: showIncomplete) { refreshOverviewData() }
         .confirmationDialog("Reset all session data?", isPresented: $showResetConfirmation) {
             Button("Reset All Sessions", role: .destructive) {
                 app.resetStatistics()
@@ -68,22 +70,38 @@ struct StatisticsView: View {
             Text("This will permanently delete all recorded sessions. This action cannot be undone.")
         }
         .animation(reduceMotion ? nil : .default, value: selectedTab)
+        .onChange(of: filterParams, initial: true) { _, params in
+            refreshStatistics(using: params)
+        }
     }
 
-    private func refreshOverviewData() {
-        let allRecords = app.records
-        let dailyGoal = app.preferences.dailyGoalMinutes
+    private func refreshStatistics(using params: FilterParams) {
+        let filtered = StatisticsCalculator.records(
+            from: params.records,
+            period: params.period,
+            tagID: params.tagID,
+            showIncomplete: params.showIncomplete
+        )
+        filteredRecords = filtered
+        groupedRecords = StatisticsCalculator.grouped(records: filtered)
+        summary = StatisticsCalculator.summary(for: filtered)
 
-        overviewStreak = ProgressCalculator.currentStreak(records: allRecords, goalMinutes: dailyGoal, asOf: Date())
-        overviewGoalProgress = ProgressCalculator.goalProgress(records: allRecords, goalMinutes: dailyGoal, on: Date())
+        let now = Date()
+        overviewStreak = ProgressCalculator.currentStreak(
+            records: params.records,
+            goalMinutes: params.dailyGoalMinutes,
+            asOf: now
+        )
+        overviewGoalProgress = ProgressCalculator.goalProgress(
+            records: params.records,
+            goalMinutes: params.dailyGoalMinutes,
+            on: now
+        )
 
-        let totals = ProgressCalculator.dailyFocusTotals(records: allRecords)
-        overviewFocusSeconds = totals[Calendar.current.startOfDay(for: Date())] ?? 0
-        overviewGoalSeconds = dailyGoal * 60
-
-        overviewHeatmap = ProgressCalculator.heatmapCells(records: allRecords, weeks: 12, endingOn: Date())
-
-        let filtered = filteredRecords
+        let totals = ProgressCalculator.dailyFocusTotals(records: params.records)
+        overviewFocusSeconds = totals[Calendar.current.startOfDay(for: now)] ?? 0
+        overviewGoalSeconds = params.dailyGoalMinutes * 60
+        overviewHeatmap = ProgressCalculator.heatmapCells(records: params.records, weeks: 12, endingOn: now)
         overviewBestHours = ProgressCalculator.bestHours(records: filtered)
         overviewPerTag = ProgressCalculator.tagFocusBuckets(records: filtered)
     }
@@ -453,10 +471,6 @@ struct StatisticsView: View {
             }
         }
         .listStyle(.inset)
-    }
-
-    private var groupedRecords: [(day: Date, records: [SessionRecord])] {
-        StatisticsCalculator.grouped(records: filteredRecords)
     }
 
     private func tag(for id: UUID?) -> Tag? {
