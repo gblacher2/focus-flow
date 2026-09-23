@@ -1,7 +1,8 @@
 import AppKit
 import ApplicationServices
+import FocusFlowCore
 
-enum TimerShortcutAction {
+enum TimerShortcutAction: CaseIterable {
     case toggleTimer
     case skip
     case reset
@@ -25,11 +26,32 @@ final class ShortcutService {
 
     private var localMonitor: Any?
     private var globalMonitor: Any?
+    private var specs: [TimerShortcutAction: ShortcutSpec] = [:]
 
-    func install(handler: @escaping (TimerShortcutAction) -> Void) -> Status {
+    func install(specs: [TimerShortcutAction: ShortcutSpec], handler: @escaping (TimerShortcutAction) -> Void) -> Status {
+        self.specs = specs
         stop()
 
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // A focused recorder must see existing bindings so it can reject
+            // duplicates before AppKit menu key-equivalent dispatch consumes them.
+            // Local NSEvent monitors run on the main event thread, so this is
+            // a synchronous bridge to the recorder's main-actor lifecycle state.
+            let keyCode = Int(event.keyCode)
+            let modifierRawValue = event.modifierFlags.rawValue
+            let recorderHandledEvent = MainActor.assumeIsolated {
+                guard let recorder = _ShortcutRecorderNSView.activeRecorder else {
+                    return false
+                }
+                recorder.handleRecordingKeyDown(
+                    keyCode: keyCode,
+                    modifierRawValue: modifierRawValue
+                )
+                return true
+            }
+            if recorderHandledEvent {
+                return nil
+            }
             guard let action = self?.action(for: event) else { return event }
             handler(action)
             return nil
@@ -37,6 +59,11 @@ final class ShortcutService {
 
         if AXIsProcessTrusted() {
             globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                // Global monitor callbacks also arrive on AppKit's main event thread.
+                let isRecorderActive = MainActor.assumeIsolated {
+                    _ShortcutRecorderNSView.activeRecorder != nil
+                }
+                guard !isRecorderActive else { return }
                 guard let action = self?.action(for: event) else { return }
                 handler(action)
             }
@@ -58,22 +85,19 @@ final class ShortcutService {
     }
 
     private func action(for event: NSEvent) -> TimerShortcutAction? {
-        let required: NSEvent.ModifierFlags = [.command, .option, .control]
-        guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).isSuperset(of: required) else {
-            return nil
-        }
+        let keyCode = Int(event.keyCode)
 
-        switch event.keyCode {
-        case 49:
-            return .toggleTimer
-        case 124:
-            return .skip
-        case 15:
-            return .reset
-        case 3:
-            return .showTimer
-        default:
-            return nil
+        // Settings prevents duplicate assignments. If a malformed or legacy
+        // preferences payload still contains one, keep dispatch deterministic.
+        for action in TimerShortcutAction.allCases {
+            guard let spec = specs[action] else { continue }
+            if spec.matches(
+                eventKeyCode: keyCode,
+                eventModifierRawValue: event.modifierFlags.rawValue
+            ) {
+                return action
+            }
         }
+        return nil
     }
 }

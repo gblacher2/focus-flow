@@ -9,31 +9,41 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 8)
+            Spacer(minLength: Theme.Spacing.sm)
 
             timerRing
 
-            Spacer(minLength: 12)
+            Spacer(minLength: Theme.Spacing.md)
 
             sessionControls
-                .padding(.bottom, 12)
+                .padding(.bottom, Theme.Spacing.md)
 
-            titleAndTag
-                .padding(.horizontal, 22)
+            ZStack(alignment: .center) {
+                if app.pendingReviewRecordID != nil {
+                    reviewRow
+                        .transition(.opacity)
+                } else {
+                    titleAndTag
+                        .transition(.opacity)
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.xxl)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: app.pendingReviewRecordID != nil)
 
-            Spacer(minLength: 6)
+            Spacer(minLength: Theme.Spacing.sm)
 
             if let error = app.errorMessage {
                 Text(error)
                     .font(.footnote)
                     .foregroundStyle(.red)
                     .lineLimit(2)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, Theme.Spacing.xxl)
+                    .padding(.bottom, Theme.Spacing.sm)
             }
         }
         .frame(minWidth: 296, idealWidth: 312)
         .scenePadding(.vertical)
+        .background(VisualEffectBackground().ignoresSafeArea())
         // macOS gives first-responder to the first focusable control (the title
         // field) when the window opens, which silently swallows the bare-Space
         // play/pause shortcut (see SpaceToggleShortcut below). `.defaultFocus`
@@ -45,12 +55,21 @@ struct ContentView: View {
                 NSApp.keyWindow?.makeFirstResponder(nil)
             }
         }
+        .sheet(isPresented: $app.isOnboardingPresented, onDismiss: {
+            app.completeOnboarding()
+        }) {
+            OnboardingView(app: app)
+        }
     }
 
     // MARK: - Timer Ring
 
     private var timerRing: some View {
         ZStack {
+            // Wash
+            Circle()
+                .fill(Color.phaseWash(app.engine.displayPhase))
+
             // Track
             Circle()
                 .stroke(.quaternary, lineWidth: 6)
@@ -59,17 +78,16 @@ struct ContentView: View {
             Circle()
                 .trim(from: 0, to: visibleProgress)
                 .stroke(
-                    ringGradient,
+                    Color.phaseGradient(app.engine.displayPhase),
                     style: StrokeStyle(lineWidth: 6, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: app.progress)
 
             // Center content
-            VStack(spacing: 5) {
+            VStack(spacing: Theme.Spacing.xs) {
                 Text(DurationFormatter.clock(app.engine.remainingSeconds))
-                    .font(.system(size: 48, weight: .light, design: .rounded))
-                    .monospacedDigit()
+                    .font(Theme.Typography.clock)
 
                 phaseLabel
 
@@ -79,6 +97,7 @@ struct ContentView: View {
             }
         }
         .frame(width: 198, height: 198)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: app.engine.phase)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ringAccessibilityLabel)
         .accessibilityValue(ringAccessibilityValue)
@@ -113,18 +132,26 @@ struct ContentView: View {
     }
 
     private var phaseLabel: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Spacing.sm) {
             Image(systemName: phaseIcon)
                 .font(.caption2)
 
-            Text(phaseLabelText)
-                .font(.subheadline.weight(.medium))
+            if app.engine.phase == .completed {
+                Text("Next: ")
+                    .font(.subheadline.weight(.medium)) +
+                Text(app.engine.pendingPhase.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+            } else {
+                Text(phaseLabelText)
+                    .font(.subheadline.weight(.medium))
+            }
         }
         .foregroundStyle(.secondary)
     }
 
     private func timerTagAccent(_ tag: Tag) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: Theme.Spacing.xs) {
             Circle()
                 .fill(Color.tag(tag.colorName))
                 .frame(width: 7, height: 7)
@@ -171,7 +198,7 @@ struct ContentView: View {
     // MARK: - Controls
 
     private var sessionControls: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: Theme.Spacing.lg) {
             Button {
                 app.previous()
             } label: {
@@ -217,11 +244,63 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Title & Tag
+    // MARK: - Title, Tag & Review
+
+    private var reviewRow: some View {
+        VStack(spacing: Theme.Spacing.sm) {
+            HStack {
+                Text("How was that focus?")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    app.dismissReview()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: 32) {
+                Button {
+                    app.setFocusQuality(1)
+                } label: {
+                    Image(systemName: "wind")
+                        .font(.title2)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Distracted")
+                .help("Distracted")
+
+                Button {
+                    app.setFocusQuality(2)
+                } label: {
+                    Image(systemName: "circle.lefthalf.filled")
+                        .font(.title2)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Okay")
+                .help("Okay")
+
+                Button {
+                    app.setFocusQuality(3)
+                } label: {
+                    Image(systemName: "flame")
+                        .font(.title2)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Deep focus")
+                .help("Deep focus")
+            }
+            .foregroundStyle(.secondary)
+        }
+    }
 
     private var titleAndTag: some View {
-        VStack(spacing: 8) {
-            VStack(spacing: 4) {
+        VStack(spacing: Theme.Spacing.sm) {
+            VStack(spacing: Theme.Spacing.xs) {
                 TextField(
                     "What are you working on?",
                     text: Binding(
@@ -278,7 +357,7 @@ struct ContentView: View {
                 }
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: Theme.Spacing.xs) {
                 if let tag = selectedTag {
                     Circle()
                         .fill(Color.tag(tag.colorName))
@@ -292,7 +371,7 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .font(.caption)
+            .font(Theme.Typography.tileCaption)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -329,16 +408,6 @@ struct ContentView: View {
         default:
             ringColor
         }
-    }
-
-    private var ringGradient: AngularGradient {
-        let base = ringColor
-        return AngularGradient(
-            colors: [base.opacity(0.6), base],
-            center: .center,
-            startAngle: .degrees(0),
-            endAngle: .degrees(360 * visibleProgress)
-        )
     }
 
     private var visibleProgress: Double {

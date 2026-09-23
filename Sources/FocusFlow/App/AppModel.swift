@@ -15,6 +15,11 @@ final class AppModel: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var shortcutStatus: ShortcutService.Status = .inactive
     @Published private(set) var notificationPermissionStatus: NotificationPermissionStatus = .unknown
+    @Published var isOnboardingPresented = false
+    @Published private(set) var loginItemStatus: LoginItemService.DisplayStatus = .notFound
+    @Published private(set) var loginItemErrorMessage: String?
+    @Published var pendingReviewRecordID: UUID?
+    @Published private(set) var didAutoPauseForIdle = false
 
     /// Closures that open SwiftUI-managed windows. Wired lazily by
     /// `EnvironmentBridgeView` in AppDelegate.swift at launch. AppModel
@@ -34,7 +39,10 @@ final class AppModel: ObservableObject {
     private let notificationService = NotificationService()
     private let soundService = SoundService()
     private let shortcutService = ShortcutService()
+    private let loginItemService = LoginItemService()
+    private let idleMonitorService = IdleMonitorService()
     private var ticker: Foundation.Timer?
+    private var tickCount = 0
     private var didBecomeActiveTask: Task<Void, Never>?
     private var integrationBridge: IntegrationBridge?
 
@@ -52,6 +60,7 @@ final class AppModel: ObservableObject {
 
         refreshRecoveredTimer()
         syncTicker()
+        refreshLoginItemStatus()
         Task { await refreshNotificationPermissionStatus() }
         configureShortcuts()
         observeAppActivation()
@@ -84,6 +93,38 @@ final class AppModel: ObservableObject {
         DurationFormatter.clock(engine.remainingSeconds)
     }
 
+    var todayGoalProgress: Double? {
+        guard preferences.dailyGoalMinutes > 0 else { return nil }
+        let goalSeconds = preferences.dailyGoalMinutes * 60
+        let stats = ProgressCalculator.dailyFocusTotals(records: records)
+        let today = Calendar.current.startOfDay(for: Date())
+        let todaySeconds = stats[today] ?? 0
+        return min(Double(todaySeconds) / Double(goalSeconds), 1.0)
+    }
+
+    var goalSummaryLine: String? {
+        guard preferences.dailyGoalMinutes > 0 else { return nil }
+        let goalSeconds = preferences.dailyGoalMinutes * 60
+        let stats = ProgressCalculator.dailyFocusTotals(records: records)
+        let today = Calendar.current.startOfDay(for: Date())
+        let todaySeconds = stats[today] ?? 0
+        let streak = ProgressCalculator.currentStreak(records: records, goalMinutes: preferences.dailyGoalMinutes, asOf: Date())
+
+        let h = todaySeconds / 3600
+        let m = (todaySeconds % 3600) / 60
+        let todayStr = h > 0 ? "\(h)h \(m)m" : "\(m)m"
+
+        let goalH = goalSeconds / 3600
+        let goalM = (goalSeconds % 3600) / 60
+        let goalStr = goalH > 0 && goalM > 0 ? "\(goalH)h \(goalM)m" : (goalH > 0 ? "\(goalH)h" : "\(goalM)m")
+
+        if streak > 0 {
+            return "Today: \(todayStr) of \(goalStr) · \(streak)-day streak"
+        } else {
+            return "Today: \(todayStr) of \(goalStr)"
+        }
+    }
+
     var selectedTag: Tag? {
         guard let selectedTagID else { return nil }
         return tags.first { $0.id == selectedTagID }
@@ -113,9 +154,15 @@ final class AppModel: ObservableObject {
     /// to apply (non-nil only while a phase is running).
     var menuBarIcon: (systemName: String, variableValue: Double?) {
         if engine.isRunning {
-            (Self.menuBarProgressSystemImage, progress)
+            return (Self.menuBarProgressSystemImage, progress)
+        } else if engine.phase == .paused {
+            // Paused state is more important than goal fill; the dropdown and
+            // accessibility label still expose today's goal progress.
+            return (menuBarSystemImage, nil)
+        } else if let progress = todayGoalProgress {
+            return (Self.menuBarProgressSystemImage, progress)
         } else {
-            (menuBarSystemImage, nil)
+            return (menuBarSystemImage, nil)
         }
     }
 
@@ -153,6 +200,8 @@ final class AppModel: ObservableObject {
 
     func toggleTimer() {
         objectWillChange.send()
+        clearIdlePauseState()
+        pendingReviewRecordID = nil
         if engine.isRunning {
             engine.pause(now: Date())
         } else {
@@ -164,6 +213,8 @@ final class AppModel: ObservableObject {
 
     func skip() {
         objectWillChange.send()
+        clearIdlePauseState()
+        pendingReviewRecordID = nil
         if let event = engine.skip(now: Date(), preferences: preferences) {
             handle(event)
         }
@@ -173,6 +224,8 @@ final class AppModel: ObservableObject {
 
     func previous() {
         objectWillChange.send()
+        clearIdlePauseState()
+        pendingReviewRecordID = nil
         engine.previous(now: Date(), preferences: preferences)
         persistRuntime()
         syncTicker()
@@ -180,6 +233,8 @@ final class AppModel: ObservableObject {
 
     func resetCycle() {
         objectWillChange.send()
+        clearIdlePauseState()
+        pendingReviewRecordID = nil
         engine.resetCycle(preferences: preferences)
         persistRuntime()
         syncTicker()
@@ -201,11 +256,28 @@ final class AppModel: ObservableObject {
 
     func updatePreferences(_ transform: (inout TimerPreferences) -> Void) {
         let notificationsWereEnabled = preferences.notificationsEnabled
+        let idlePauseWasEnabled = preferences.idlePauseEnabled
+        let oldShortcuts = [
+            preferences.toggleShortcut, preferences.skipShortcut,
+            preferences.resetShortcut, preferences.showTimerShortcut
+        ]
         var next = preferences
         transform(&next)
         next.validate()
         preferences = next
         preferenceStore.save(next)
+
+        let newShortcuts = [
+            next.toggleShortcut, next.skipShortcut,
+            next.resetShortcut, next.showTimerShortcut
+        ]
+        if oldShortcuts != newShortcuts {
+            recheckShortcuts()
+        }
+        if idlePauseWasEnabled && !next.idlePauseEnabled {
+            clearIdlePauseState()
+        }
+
         objectWillChange.send()
         engine.applyPreferences(next, now: Date())
         Task {
@@ -239,6 +311,76 @@ final class AppModel: ObservableObject {
 
     func openNotificationSettings() {
         notificationService.openSystemNotificationSettings()
+    }
+
+    func completeOnboarding() {
+        if !preferences.hasCompletedOnboarding {
+            updatePreferences { $0.hasCompletedOnboarding = true }
+        }
+        isOnboardingPresented = false
+    }
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        // Bundle is not in a location SMAppService can register. Silently
+        // ignore the request — the toggle is disabled in the UI for this case.
+        guard loginItemStatus != .notFound else { return }
+        loginItemErrorMessage = nil
+        do {
+            try loginItemService.setEnabled(enabled)
+            refreshLoginItemStatus()
+
+            let reflectsRequestedState: Bool
+            if enabled {
+                reflectsRequestedState = loginItemStatus == .enabled
+                    || loginItemStatus == .requiresApproval
+            } else {
+                reflectsRequestedState = loginItemStatus == .disabled
+                    || loginItemStatus == .notFound
+            }
+
+            guard reflectsRequestedState else {
+                let message = enabled
+                    ? "FocusFlow could not register as a login item."
+                    : "FocusFlow could not remove its login item."
+                loginItemErrorMessage = message
+                errorMessage = message
+                return
+            }
+
+            updatePreferences { $0.launchAtLogin = enabled }
+        } catch {
+            loginItemErrorMessage = error.localizedDescription
+            errorMessage = error.localizedDescription
+        }
+        refreshLoginItemStatus()
+    }
+
+    func openLoginItemsSettings() {
+        loginItemService.openLoginItemsSettings()
+    }
+
+    func refreshLoginItemStatus() {
+        loginItemStatus = loginItemService.status
+    }
+
+    var loginItemStatusDescription: String {
+        switch loginItemStatus {
+        case .enabled:
+            "Enabled in System Settings"
+        case .disabled:
+            preferences.launchAtLogin
+                ? "Disabled in System Settings; your preference is still on"
+                : "Off"
+        case .requiresApproval:
+            "Needs approval in System Settings → General → Login Items"
+        case .notFound:
+            "Move FocusFlow to /Applications to enable launch at login."
+        }
+    }
+
+    var loginItemStatusNeedsAttention: Bool {
+        loginItemStatus == .requiresApproval
+            || (loginItemStatus == .disabled && preferences.launchAtLogin)
     }
 
     func addTag(title: String, colorName: String) {
@@ -351,14 +493,48 @@ final class AppModel: ObservableObject {
             stopTicker()
             return
         }
+
         // Redraw the countdown each second, but only touch the disk when the phase
         // actually transitions — remaining time is derived from the saved targetEnd,
         // so per-second persistence would be pure I/O for no recovery benefit.
         objectWillChange.send()
-        if let event = engine.tick(now: Date(), preferences: preferences) {
+        let now = Date()
+        if let event = engine.tick(now: now, preferences: preferences) {
             handle(event)
             persistRuntime()
             syncTicker()
+            return
+        }
+
+        // Completion above must win if the target end has already passed. Only
+        // a still-running focus may be converted into an idle pause.
+        tickCount += 1
+        if preferences.idlePauseEnabled, engine.phase == .focus, tickCount % 5 == 0 {
+            let idleSeconds = idleMonitorService.secondsSinceLastInput()
+            if idleSeconds >= Double(preferences.idlePauseMinutes * 60) {
+                autoPauseForIdle(idleSeconds: idleSeconds)
+            }
+        }
+    }
+
+    private func autoPauseForIdle(idleSeconds: TimeInterval) {
+        objectWillChange.send()
+        let now = Date()
+        let backdated = now.addingTimeInterval(-idleSeconds)
+        let start = engine.startedAt ?? Date.distantPast
+        let clampedPause = max(backdated, start)
+
+        engine.pause(now: clampedPause)
+        didAutoPauseForIdle = true
+        persistRuntime()
+        syncTicker()
+
+        idleMonitorService.startReturnPoll { [weak self] in
+            guard let self = self else { return }
+            self.didAutoPauseForIdle = false
+            if self.preferences.notificationsEnabled {
+                self.notificationService.notify(title: "Paused while you were away", body: "Resume when you're ready.")
+            }
         }
     }
 
@@ -394,6 +570,7 @@ final class AppModel: ObservableObject {
         }
 
         let record = SessionRecord(
+            id: UUID(),
             phase: completedPhase.phase,
             title: completedPhase.title,
             tagID: completedPhase.tagID,
@@ -405,14 +582,22 @@ final class AppModel: ObservableObject {
             interruptionCount: completedPhase.interruptionCount
         )
 
+        var recordWasSaved = false
         do {
-            try sessionStore?.addRecord(record)
+            guard let sessionStore else {
+                throw SessionStoreError.storeUnavailable
+            }
+            try sessionStore.addRecord(record)
+            recordWasSaved = true
             reloadSessionData()
         } catch {
             errorMessage = error.localizedDescription
         }
 
         if completed && playFeedback {
+            if recordWasSaved, completedPhase.phase == .focus, preferences.showSessionReview {
+                pendingReviewRecordID = record.id
+            }
             playCompletionFeedback(for: completedPhase.phase, nextPhase: completedPhase.nextPhase)
         }
     }
@@ -441,7 +626,13 @@ final class AppModel: ObservableObject {
     }
 
     private func configureShortcuts() {
-        shortcutStatus = shortcutService.install { [weak self] action in
+        let specs: [TimerShortcutAction: ShortcutSpec] = [
+            .toggleTimer: preferences.toggleShortcut,
+            .skip: preferences.skipShortcut,
+            .reset: preferences.resetShortcut,
+            .showTimer: preferences.showTimerShortcut
+        ]
+        shortcutStatus = shortcutService.install(specs: specs) { [weak self] action in
             Task { @MainActor in
                 self?.performShortcut(action)
             }
@@ -469,6 +660,7 @@ final class AppModel: ObservableObject {
                 if self.shortcutStatus == .localOnly && AXIsProcessTrusted() {
                     self.recheckShortcuts()
                 }
+                self.refreshLoginItemStatus()
             }
         }
     }
@@ -485,6 +677,29 @@ final class AppModel: ObservableObject {
     private func reloadSessionData() {
         records = sessionStore?.data.records ?? []
         tags = sessionStore?.data.tags ?? []
+    }
+
+    func setFocusQuality(_ quality: Int) {
+        guard let id = pendingReviewRecordID else { return }
+        do {
+            guard let sessionStore else {
+                throw SessionStoreError.storeUnavailable
+            }
+            try sessionStore.updateRecordQuality(id: id, quality: quality)
+            reloadSessionData()
+            pendingReviewRecordID = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func dismissReview() {
+        pendingReviewRecordID = nil
+    }
+
+    private func clearIdlePauseState() {
+        idleMonitorService.stopReturnPoll()
+        didAutoPauseForIdle = false
     }
 
     private func writeCSV(to url: URL) {

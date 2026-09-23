@@ -1,5 +1,19 @@
 import Foundation
 
+public enum SessionStoreError: LocalizedError, Equatable {
+    case storeUnavailable
+    case recordNotFound(UUID)
+
+    public var errorDescription: String? {
+        switch self {
+        case .storeUnavailable:
+            "FocusFlow could not access its session store."
+        case .recordNotFound:
+            "The session record could not be found."
+        }
+    }
+}
+
 public final class SessionStore {
     public private(set) var data: SessionStoreData
 
@@ -22,6 +36,14 @@ public final class SessionStore {
 
     public func deleteRecord(id: UUID) throws {
         data.records.removeAll { $0.id == id }
+        try save()
+    }
+
+    public func updateRecordQuality(id: UUID, quality: Int?) throws {
+        guard let index = data.records.firstIndex(where: { $0.id == id }) else {
+            throw SessionStoreError.recordNotFound(id)
+        }
+        data.records[index].focusQuality = quality
         try save()
     }
 

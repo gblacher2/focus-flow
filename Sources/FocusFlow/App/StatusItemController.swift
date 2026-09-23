@@ -15,6 +15,7 @@ final class StatusItemController: NSObject {
     private let statusItem: NSStatusItem
     private let app: AppModel
     private var cancellable: AnyCancellable?
+    private var dayRefreshTimer: Foundation.Timer?
 
     init(app: AppModel) {
         self.app = app
@@ -28,6 +29,7 @@ final class StatusItemController: NSObject {
         }
 
         updateAppearance()
+        scheduleNextDayRefresh()
 
         // Re-render the button whenever AppModel publishes a change.
         // `objectWillChange` fires *before* the mutation, so we dispatch to
@@ -80,7 +82,7 @@ final class StatusItemController: NSObject {
         let icon = app.menuBarIcon
 
         let title = showsCountdown ? " \(app.menuBarTitle)" : ""
-        let label: String
+        var label: String
         if showsCountdown {
             label = "FocusFlow timer \(app.menuBarTitle)"
         } else {
@@ -94,6 +96,9 @@ final class StatusItemController: NSObject {
             case .focus, .shortBreak, .longBreak:
                 label = "FocusFlow timer"
             }
+        }
+        if let goalSummary = app.goalSummaryLine {
+            label += ", \(goalSummary)"
         }
 
         let next = Appearance(
@@ -114,8 +119,8 @@ final class StatusItemController: NSObject {
             let nsColor = NSColor(Color.phase(phase))
             var config = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
             config = config.applying(.init(paletteColors: [nsColor]))
-            // variableValue is non-nil only while running; hierarchical color
-            // dims the unfilled portion of the progress glyph.
+            // variableValue is non-nil while running or while an idle daily-goal
+            // glyph is visible; hierarchical color dims the unfilled portion.
             if icon.variableValue != nil {
                 config = config.applying(.init(hierarchicalColor: nsColor))
             }
@@ -150,6 +155,32 @@ final class StatusItemController: NSObject {
         }
     }
 
+    /// There is deliberately no per-second ticker while idle. Refresh once at
+    /// the next local midnight so yesterday's goal fill and label cannot linger.
+    private func scheduleNextDayRefresh() {
+        dayRefreshTimer?.invalidate()
+        let calendar = Calendar.autoupdatingCurrent
+        let today = calendar.startOfDay(for: Date())
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) else {
+            return
+        }
+
+        let timer = Foundation.Timer(
+            fire: tomorrow.addingTimeInterval(1),
+            interval: 0,
+            repeats: false
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.updateAppearance()
+                self.scheduleNextDayRefresh()
+            }
+        }
+        timer.tolerance = 30
+        RunLoop.main.add(timer, forMode: .common)
+        dayRefreshTimer = timer
+    }
+
     // MARK: - Menu Construction
 
     private func buildMenu() -> NSMenu {
@@ -168,15 +199,22 @@ final class StatusItemController: NSObject {
             menu.addItem(detailItem)
         }
 
+        if let goalSummary = app.goalSummaryLine {
+            let goalItem = NSMenuItem()
+            goalItem.title = goalSummary
+            goalItem.isEnabled = false
+            menu.addItem(goalItem)
+        }
+
         menu.addItem(.separator())
 
         // ── Primary action ──
         let primary = NSMenuItem(
             title: primaryLabel,
             action: #selector(doToggleTimer),
-            keyEquivalent: " "
+            keyEquivalent: app.preferences.toggleShortcut.menuKeyEquivalent
         )
-        primary.keyEquivalentModifierMask = [.command, .option, .control]
+        primary.keyEquivalentModifierMask = app.preferences.toggleShortcut.menuModifierMask
         primary.target = self
         menu.addItem(primary)
 
@@ -184,9 +222,9 @@ final class StatusItemController: NSObject {
         let skip = NSMenuItem(
             title: "Skip Phase",
             action: #selector(doSkip),
-            keyEquivalent: String(Character(UnicodeScalar(NSRightArrowFunctionKey)!))
+            keyEquivalent: app.preferences.skipShortcut.menuKeyEquivalent
         )
-        skip.keyEquivalentModifierMask = [.command, .option, .control]
+        skip.keyEquivalentModifierMask = app.preferences.skipShortcut.menuModifierMask
         skip.target = self
         menu.addItem(skip)
 
@@ -196,8 +234,8 @@ final class StatusItemController: NSObject {
         menu.addItem(prev)
 
         // ── Reset ──
-        let reset = NSMenuItem(title: "Reset Cycle", action: #selector(doResetCycle), keyEquivalent: "r")
-        reset.keyEquivalentModifierMask = [.command, .option, .control]
+        let reset = NSMenuItem(title: "Reset Cycle", action: #selector(doResetCycle), keyEquivalent: app.preferences.resetShortcut.menuKeyEquivalent)
+        reset.keyEquivalentModifierMask = app.preferences.resetShortcut.menuModifierMask
         reset.target = self
         menu.addItem(reset)
 
@@ -212,8 +250,8 @@ final class StatusItemController: NSObject {
         menu.addItem(.separator())
 
         // ── Windows ──
-        let timerWin = NSMenuItem(title: "Timer Window", action: #selector(doOpenTimerWindow), keyEquivalent: "f")
-        timerWin.keyEquivalentModifierMask = [.command, .option, .control]
+        let timerWin = NSMenuItem(title: "Timer Window", action: #selector(doOpenTimerWindow), keyEquivalent: app.preferences.showTimerShortcut.menuKeyEquivalent)
+        timerWin.keyEquivalentModifierMask = app.preferences.showTimerShortcut.menuModifierMask
         timerWin.target = self
         menu.addItem(timerWin)
 

@@ -13,6 +13,16 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
     public var breakCompleteSound: TimerSound
     public var showWindowAtLaunch: Bool
     public var showCountdownWhenIdle: Bool
+    public var hasCompletedOnboarding: Bool
+    public var launchAtLogin: Bool
+    public var idlePauseEnabled: Bool
+    public var idlePauseMinutes: Int
+    public var dailyGoalMinutes: Int
+    public var showSessionReview: Bool
+    public var toggleShortcut: ShortcutSpec
+    public var skipShortcut: ShortcutSpec
+    public var resetShortcut: ShortcutSpec
+    public var showTimerShortcut: ShortcutSpec
 
     public init(
         focusMinutes: Int = 25,
@@ -26,7 +36,17 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         focusCompleteSound: TimerSound = .ping,
         breakCompleteSound: TimerSound = .glass,
         showWindowAtLaunch: Bool = false,
-        showCountdownWhenIdle: Bool = false
+        showCountdownWhenIdle: Bool = false,
+        hasCompletedOnboarding: Bool = false,
+        launchAtLogin: Bool = false,
+        idlePauseEnabled: Bool = false,
+        idlePauseMinutes: Int = 5,
+        dailyGoalMinutes: Int = 0,
+        showSessionReview: Bool = true,
+        toggleShortcut: ShortcutSpec = .defaultToggle,
+        skipShortcut: ShortcutSpec = .defaultSkip,
+        resetShortcut: ShortcutSpec = .defaultReset,
+        showTimerShortcut: ShortcutSpec = .defaultShowTimer
     ) {
         self.focusMinutes = focusMinutes
         self.shortBreakMinutes = shortBreakMinutes
@@ -40,6 +60,16 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         self.breakCompleteSound = breakCompleteSound
         self.showWindowAtLaunch = showWindowAtLaunch
         self.showCountdownWhenIdle = showCountdownWhenIdle
+        self.hasCompletedOnboarding = hasCompletedOnboarding
+        self.launchAtLogin = launchAtLogin
+        self.idlePauseEnabled = idlePauseEnabled
+        self.idlePauseMinutes = idlePauseMinutes
+        self.dailyGoalMinutes = dailyGoalMinutes
+        self.showSessionReview = showSessionReview
+        self.toggleShortcut = toggleShortcut
+        self.skipShortcut = skipShortcut
+        self.resetShortcut = resetShortcut
+        self.showTimerShortcut = showTimerShortcut
         self.validate()
     }
 
@@ -56,6 +86,16 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         case breakCompleteSound
         case showWindowAtLaunch
         case showCountdownWhenIdle
+        case hasCompletedOnboarding
+        case launchAtLogin
+        case idlePauseEnabled
+        case idlePauseMinutes
+        case dailyGoalMinutes
+        case showSessionReview
+        case toggleShortcut
+        case skipShortcut
+        case resetShortcut
+        case showTimerShortcut
     }
 
     // Explicit decoding so that JSON persisted before newer preference keys
@@ -69,6 +109,13 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
     // `showWindowAtLaunch`, so a missing key decodes as `false`. Other
     // fields keep strict decoding since they've always been present in
     // persisted payloads.
+    //
+    // New premium revamp fields missing-key defaults:
+    // - `hasCompletedOnboarding`: Installs that predate onboarding must never see it, so missing key decodes as `true`.
+    // - `launchAtLogin`, `idlePauseEnabled`, `dailyGoalMinutes`: Decode to feature-off states (`false` or `0`).
+    // - `idlePauseMinutes`: Defaults to 5 when missing.
+    // - `showSessionReview`: Defaults to `true` (opt-out prompt for existing users).
+    // - Shortcuts: Default to the hardcoded combos previously present in the app.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         focusMinutes = try container.decode(Int.self, forKey: .focusMinutes)
@@ -83,6 +130,18 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         breakCompleteSound = try container.decode(TimerSound.self, forKey: .breakCompleteSound)
         showWindowAtLaunch = try container.decodeIfPresent(Bool.self, forKey: .showWindowAtLaunch) ?? false
         showCountdownWhenIdle = try container.decodeIfPresent(Bool.self, forKey: .showCountdownWhenIdle) ?? true
+
+        hasCompletedOnboarding = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? true
+        launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
+        idlePauseEnabled = try container.decodeIfPresent(Bool.self, forKey: .idlePauseEnabled) ?? false
+        idlePauseMinutes = try container.decodeIfPresent(Int.self, forKey: .idlePauseMinutes) ?? 5
+        dailyGoalMinutes = try container.decodeIfPresent(Int.self, forKey: .dailyGoalMinutes) ?? 0
+        showSessionReview = try container.decodeIfPresent(Bool.self, forKey: .showSessionReview) ?? true
+        toggleShortcut = try container.decodeIfPresent(ShortcutSpec.self, forKey: .toggleShortcut) ?? .defaultToggle
+        skipShortcut = try container.decodeIfPresent(ShortcutSpec.self, forKey: .skipShortcut) ?? .defaultSkip
+        resetShortcut = try container.decodeIfPresent(ShortcutSpec.self, forKey: .resetShortcut) ?? .defaultReset
+        showTimerShortcut = try container.decodeIfPresent(ShortcutSpec.self, forKey: .showTimerShortcut) ?? .defaultShowTimer
+
         validate()
     }
 
@@ -116,6 +175,8 @@ public struct TimerPreferences: Codable, Equatable, Sendable {
         shortBreakMinutes = Self.clamp(shortBreakMinutes, lower: 1, upper: 120)
         longBreakMinutes = Self.clamp(longBreakMinutes, lower: 1, upper: 240)
         sessionsBeforeLongBreak = Self.clamp(sessionsBeforeLongBreak, lower: 1, upper: 12)
+        idlePauseMinutes = Self.clamp(idlePauseMinutes, lower: 1, upper: 30)
+        dailyGoalMinutes = Self.clamp(dailyGoalMinutes, lower: 0, upper: 1440)
     }
 
     public func validated() -> TimerPreferences {

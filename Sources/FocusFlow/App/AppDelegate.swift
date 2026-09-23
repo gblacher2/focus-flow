@@ -65,6 +65,7 @@ private struct EnvironmentBridgeView: View {
     let app: AppModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         Color.clear
@@ -77,10 +78,17 @@ private struct EnvironmentBridgeView: View {
                 // Show-at-launch must run after the closures above exist;
                 // `attachIfNeeded` guards this view's one-time creation, so
                 // this task body runs at most once.
-                if app.preferences.showWindowAtLaunch {
+                let needsOnboarding = !app.preferences.hasCompletedOnboarding
+                if needsOnboarding || app.preferences.showWindowAtLaunch {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: "timer")
+                } else {
+                    // SwiftUI creates the primary Window scene by default. Honor
+                    // the menu-bar-first preference by closing that launch window;
+                    // this task runs once and never affects later user-opened windows.
+                    dismissWindow(id: "timer")
                 }
+                if needsOnboarding { app.isOnboardingPresented = true }
             }
     }
 }

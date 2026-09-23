@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var app: AppModel
     @State private var newTagTitle = ""
     @State private var newTagColor = "blue"
+    @State private var duplicateMessage: String?
 
     var body: some View {
         TabView {
@@ -21,6 +22,7 @@ struct SettingsView: View {
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
         }
         .task {
+            app.refreshLoginItemStatus()
             await app.refreshNotificationPermissionStatus()
         }
         .controlSize(.small)
@@ -64,13 +66,50 @@ struct SettingsView: View {
                 Stepper(value: preferenceBinding(\.sessionsBeforeLongBreak), in: 1...12) {
                     SettingsRow("Sessions before long break", value: "\(app.preferences.sessionsBeforeLongBreak)")
                 }
+
+                Stepper(value: preferenceBinding(\.dailyGoalMinutes), in: 0...1440, step: 15) {
+                    SettingsRow("Daily Goal", value: formatDailyGoal(app.preferences.dailyGoalMinutes))
+                }
             }
 
             Section("Behavior") {
+                Toggle("Launch FocusFlow at login", isOn: Binding(
+                    get: { app.preferences.launchAtLogin },
+                    set: { app.setLaunchAtLogin($0) }
+                ))
+                .disabled(app.loginItemStatus == .notFound)
+
+                HStack {
+                    Text(app.loginItemStatusDescription)
+                        .font(.caption)
+                        .foregroundStyle(app.loginItemStatusNeedsAttention ? .orange : .secondary)
+
+                    Spacer()
+
+                    if app.loginItemStatus == .requiresApproval {
+                        Button("Open Login Items") {
+                            app.openLoginItemsSettings()
+                        }
+                    }
+                }
+
+                if let loginError = app.loginItemErrorMessage {
+                    Text(loginError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
                 Toggle("Start breaks automatically", isOn: preferenceBinding(\.autoStartBreaks))
                 Toggle("Start focus automatically", isOn: preferenceBinding(\.autoStartFocus))
                 Toggle("Show timer window at launch", isOn: preferenceBinding(\.showWindowAtLaunch))
                 Toggle("Show countdown in menu bar when not running", isOn: preferenceBinding(\.showCountdownWhenIdle))
+                Toggle("Auto-pause when away", isOn: preferenceBinding(\.idlePauseEnabled))
+
+                if app.preferences.idlePauseEnabled {
+                    Stepper(value: preferenceBinding(\.idlePauseMinutes), in: 1...30) {
+                        SettingsRow("Idle pause delay", value: "\(app.preferences.idlePauseMinutes) min")
+                    }
+                }
             }
         }
         .formStyle(.grouped)
@@ -83,7 +122,7 @@ struct SettingsView: View {
         Form {
             Section("Phase Alerts") {
                 LabeledContent("macOS permission") {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Theme.Spacing.sm) {
                         Image(systemName: notificationStatusIcon)
                             .font(.caption)
                             .foregroundStyle(notificationStatusColor)
@@ -92,12 +131,13 @@ struct SettingsView: View {
                 }
 
                 Toggle("Show notifications", isOn: preferenceBinding(\.notificationsEnabled))
+                Toggle("Ask for focus quality", isOn: preferenceBinding(\.showSessionReview))
 
                 Text(notificationExplanationText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                HStack(spacing: 8) {
+                HStack(spacing: Theme.Spacing.sm) {
                     if app.notificationPermissionStatus == .notDetermined {
                         Button("Request Permission") {
                             Task {
@@ -166,13 +206,13 @@ struct SettingsView: View {
     private var tagSettings: some View {
         VStack(spacing: 0) {
             // New tag row
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Spacing.sm) {
                 TextField("New tag name", text: $newTagTitle)
                     .textFieldStyle(.roundedBorder)
 
                 Picker(selection: $newTagColor) {
                     ForEach(TagPalette.names, id: \.self) { color in
-                        HStack(spacing: 6) {
+                        HStack(spacing: Theme.Spacing.sm) {
                             Circle()
                                 .fill(Color.tag(color))
                                 .frame(width: 7, height: 7)
@@ -196,7 +236,7 @@ struct SettingsView: View {
                 .disabled(newTagTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .help("Add tag")
             }
-            .padding(12)
+            .padding(Theme.Spacing.md)
 
             Divider()
 
@@ -205,11 +245,11 @@ struct SettingsView: View {
                     ContentUnavailableView {
                         Label("No Tags", systemImage: "tag")
                     } description: {
-                        Text("Add a tag above to categorize sessions.")
+                        Text("Add a tag to categorize your focus sessions.")
                     }
                 } else {
                     ForEach(app.tags) { tag in
-                        HStack(spacing: 8) {
+                        HStack(spacing: Theme.Spacing.sm) {
                             Circle()
                                 .fill(Color.tag(tag.colorName))
                                 .frame(width: 7, height: 7)
@@ -238,7 +278,7 @@ struct SettingsView: View {
         Form {
             Section {
                 LabeledContent("Status") {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Theme.Spacing.sm) {
                         Image(systemName: shortcutStatusIcon)
                             .foregroundStyle(shortcutStatusColor)
                             .font(.caption)
@@ -258,10 +298,29 @@ struct SettingsView: View {
             }
 
             Section("Key Bindings") {
-                LabeledContent("Start / Pause", value: "⌃⌥⌘ Space")
-                LabeledContent("Skip Phase", value: "⌃⌥⌘ →")
-                LabeledContent("Reset Cycle", value: "⌃⌥⌘ R")
-                LabeledContent("Show Timer", value: "⌃⌥⌘ F")
+                let def = TimerPreferences()
+                shortcutRow(title: "Toggle Timer", keyPath: \.toggleShortcut, defaultSpec: def.toggleShortcut)
+                shortcutRow(title: "Skip Phase", keyPath: \.skipShortcut, defaultSpec: def.skipShortcut)
+                shortcutRow(title: "Reset Cycle", keyPath: \.resetShortcut, defaultSpec: def.resetShortcut)
+                shortcutRow(title: "Show Timer", keyPath: \.showTimerShortcut, defaultSpec: def.showTimerShortcut)
+
+                Button("Restore Defaults") {
+                    app.updatePreferences { prefs in
+                        prefs.toggleShortcut = def.toggleShortcut
+                        prefs.skipShortcut = def.skipShortcut
+                        prefs.resetShortcut = def.resetShortcut
+                        prefs.showTimerShortcut = def.showTimerShortcut
+                    }
+                }
+            }
+
+            if let msg = duplicateMessage {
+                Section {
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .transition(.opacity)
+                }
             }
 
             if app.shortcutStatus == .localOnly {
@@ -282,13 +341,13 @@ struct SettingsView: View {
     private func presetRow(_ preset: SessionPreset) -> some View {
         let isActive = app.activePreset?.id == preset.id
 
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Spacing.md) {
             Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
                 .font(.body)
                 .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
 
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
+                HStack(spacing: Theme.Spacing.sm) {
                     Text(preset.name)
                         .font(.body)
                         .foregroundStyle(.primary)
@@ -321,6 +380,68 @@ struct SettingsView: View {
                 }
             }
         )
+    }
+
+    @ViewBuilder
+    private func shortcutRow(title: String, keyPath: WritableKeyPath<TimerPreferences, ShortcutSpec>, defaultSpec: ShortcutSpec) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            ShortcutRecorderView(
+                title: title,
+                spec: preferenceBinding(keyPath),
+                defaultSpec: defaultSpec,
+                onDuplicate: showDuplicateMessage,
+                otherSpecs: otherShortcutSpecs(excluding: keyPath)
+            )
+            .frame(width: 140, height: 26)
+
+            Button {
+                assignShortcut(defaultSpec, to: keyPath)
+            } label: {
+                Image(systemName: "arrow.uturn.backward.circle")
+            }
+            .buttonStyle(.plain)
+            .help("Reset to default")
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func otherShortcutSpecs(
+        excluding keyPath: WritableKeyPath<TimerPreferences, ShortcutSpec>
+    ) -> [ShortcutSpec] {
+        let assignments: [(WritableKeyPath<TimerPreferences, ShortcutSpec>, ShortcutSpec)] = [
+            (\TimerPreferences.toggleShortcut, app.preferences.toggleShortcut),
+            (\TimerPreferences.skipShortcut, app.preferences.skipShortcut),
+            (\TimerPreferences.resetShortcut, app.preferences.resetShortcut),
+            (\TimerPreferences.showTimerShortcut, app.preferences.showTimerShortcut)
+        ]
+        return assignments
+            .filter { $0.0 != keyPath }
+            .map { $0.1 }
+    }
+
+    private func assignShortcut(
+        _ candidate: ShortcutSpec,
+        to keyPath: WritableKeyPath<TimerPreferences, ShortcutSpec>
+    ) {
+        if otherShortcutSpecs(excluding: keyPath).contains(where: { $0.conflicts(with: candidate) }) {
+            showDuplicateMessage(candidate)
+            return
+        }
+        app.updatePreferences { preferences in
+            preferences[keyPath: keyPath] = candidate
+        }
+    }
+
+    private func showDuplicateMessage(_ duplicateSpec: ShortcutSpec) {
+        duplicateMessage = "Shortcut \(duplicateSpec.displayString) is already used."
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if duplicateMessage?.contains(duplicateSpec.displayString) == true {
+                duplicateMessage = nil
+            }
+        }
     }
 
     private var shortcutStatusIcon: String {
@@ -398,13 +519,22 @@ struct SettingsView: View {
             return "The current macOS notification permission could not be read."
         }
     }
+
+    private func formatDailyGoal(_ minutes: Int) -> String {
+        if minutes == 0 { return "Off" }
+        let h = minutes / 60
+        let m = minutes % 60
+        if h > 0 && m > 0 { return "\(h)h \(m)m" }
+        if h > 0 { return "\(h)h" }
+        return "\(m)m"
+    }
 }
 
 private extension View {
     func formBottomBreathingRoom() -> some View {
         safeAreaInset(edge: .bottom) {
             Color.clear
-                .frame(height: 12)
+                .frame(height: Theme.Spacing.md)
         }
     }
 }

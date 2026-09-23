@@ -23,6 +23,8 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
     public var actualSeconds: Int
     public var completed: Bool
     public var interruptionCount: Int
+    /// Semantic values 1 (distracted), 2 (okay), 3 (deep); nil = not reviewed.
+    public var focusQuality: Int?
 
     public init(
         id: UUID = UUID(),
@@ -34,7 +36,8 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
         plannedSeconds: Int,
         actualSeconds: Int,
         completed: Bool,
-        interruptionCount: Int
+        interruptionCount: Int,
+        focusQuality: Int? = nil
     ) {
         self.id = id
         self.phase = phase
@@ -46,6 +49,7 @@ public struct SessionRecord: Codable, Equatable, Identifiable, Sendable {
         self.actualSeconds = actualSeconds
         self.completed = completed
         self.interruptionCount = interruptionCount
+        self.focusQuality = focusQuality
     }
 }
 
