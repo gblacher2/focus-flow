@@ -176,9 +176,9 @@ When developing hybrid SwiftUI and AppKit macOS applications, follow these estab
 
 5. **NSViewRepresentable / UIViewRepresentable Delegate Concurrency**:
    When implementing a `Coordinator` that conforms to a custom delegate protocol for an AppKit/UIKit view, the compiler may flag `sending 'self' risks causing data races` if you attempt to wrap delegate method bodies in `Task { @MainActor in }`.
-   
+
    **Pattern**: Do not use `Task` wrappers inside the methods. Instead, mark both the delegate protocol and the `Coordinator` class with `@MainActor`, as AppKit/UIKit UI events are inherently fired on the main thread.
-   
+
    ```swift
    @MainActor
    protocol MyCustomViewDelegate: AnyObject {
