@@ -1,3 +1,7 @@
 ## 2024-07-08 - Prevent per-second statistics recalculation
 **Learning:** SwiftUI anti-pattern found: doing O(N log N) array filtering and sorting inside computed properties of a view (`StatisticsView.swift`) that observes an `AppModel` triggering updates every second (on timer tick). Swift `Array` equality checking is `O(1)` when unmodified due to buffer identity, making it extremely efficient to use as a dependency in `.onChange`.
 **Action:** Cache expensive derived data calculations using `@State` variables and `.onChange(of: filterParams)` rather than computing them directly inside properties that will be evaluated on every single View render.
+
+## 2024-07-24 - Prevent O(N) Calendar calculations in tight loops
+**Learning:** Swift `Calendar` methods (like `.component(_:from:)` or `.isDate(_:inSameDayAs:)`) have significant performance overhead due to underlying ICU date math. Evaluating them inside a `.filter` loop (e.g., in `StatisticsCalculator`) turns a linear array scan into a severe bottleneck for large session histories.
+**Action:** When filtering dates by calendar periods, always pre-calculate a single `DateInterval` for the target period using `calendar.dateInterval(of:for:)` before the loop, then use the `O(1)` `interval.contains(date)` method inside the loop. This reduces the time complexity and overhead dramatically. Never hardcode durations (like 86400 seconds) to avoid DST bugs.
