@@ -15,14 +15,27 @@ enum AppFormatters {
         return formatter
     }()
 
+    // Cached formatters for dayHeader to prevent expensive initialization on the fly
+    private static let dayHeaderSameYearFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM d"
+        return formatter
+    }()
+
+    private static let dayHeaderOtherYearFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM d, yyyy"
+        return formatter
+    }()
+
     /// Day header for grouped statistics, e.g. "June 12" (current year) or
     /// "June 12, 2025" (other years). "Today"/"Yesterday" are handled by the view.
     static func dayHeader(for date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         if calendar.isDateInToday(date) { return "Today" }
         if calendar.isDateInYesterday(date) { return "Yesterday" }
-        let formatter = DateFormatter()
+
         let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
-        formatter.dateFormat = sameYear ? "MMMM d" : "MMMM d, yyyy"
+        let formatter = sameYear ? dayHeaderSameYearFormatter : dayHeaderOtherYearFormatter
         return formatter.string(from: date)
     }
 }
