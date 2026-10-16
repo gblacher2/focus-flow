@@ -17,14 +17,15 @@ public enum CSVExporter {
             "quality"
         ].joined(separator: ",")
 
+        let dateFormatter = ISO8601DateFormatter()
         let rows = records.sorted { $0.startedAt < $1.startedAt }.map { record in
             [
                 record.id.uuidString,
                 record.phase.displayName,
                 record.title,
                 record.tagID.flatMap { tagLookup[$0] } ?? "",
-                ISO8601DateFormatter().string(from: record.startedAt),
-                ISO8601DateFormatter().string(from: record.endedAt),
+                dateFormatter.string(from: record.startedAt),
+                dateFormatter.string(from: record.endedAt),
                 String(record.plannedSeconds),
                 String(record.actualSeconds),
                 record.completed ? "true" : "false",
