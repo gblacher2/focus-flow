@@ -19,11 +19,31 @@ public enum StatisticsCalculator {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [SessionRecord] {
-        records
+        // Pre-calculate the date interval to avoid expensive Calendar component
+        // math inside the O(N) filter loop. DateInterval contains() is O(1).
+        let filterInterval: DateInterval?
+        switch period {
+        case .all:
+            filterInterval = nil
+        case .day:
+            filterInterval = calendar.dateInterval(of: .day, for: now)
+        case .week:
+            filterInterval = calendar.dateInterval(of: .weekOfYear, for: now)
+        case .month:
+            filterInterval = calendar.dateInterval(of: .month, for: now)
+        case .year:
+            filterInterval = calendar.dateInterval(of: .year, for: now)
+        }
+
+        return records
             .filter { record in
                 guard showIncomplete || record.completed else { return false }
                 if let tagID, record.tagID != tagID { return false }
-                return contains(record.startedAt, in: period, now: now, calendar: calendar)
+                if period != .all {
+                    guard let filterInterval else { return false }
+                    return filterInterval.contains(record.startedAt)
+                }
+                return true
             }
             .sorted { $0.startedAt > $1.startedAt }
     }
@@ -63,25 +83,4 @@ public enum StatisticsCalculator {
         }
     }
 
-    private static func contains(
-        _ date: Date,
-        in period: StatisticsPeriod,
-        now: Date,
-        calendar: Calendar
-    ) -> Bool {
-        switch period {
-        case .all:
-            true
-        case .day:
-            calendar.isDate(date, inSameDayAs: now)
-        case .week:
-            calendar.component(.weekOfYear, from: date) == calendar.component(.weekOfYear, from: now) &&
-                calendar.component(.yearForWeekOfYear, from: date) == calendar.component(.yearForWeekOfYear, from: now)
-        case .month:
-            calendar.component(.month, from: date) == calendar.component(.month, from: now) &&
-                calendar.component(.year, from: date) == calendar.component(.year, from: now)
-        case .year:
-            calendar.component(.year, from: date) == calendar.component(.year, from: now)
-        }
-    }
 }
